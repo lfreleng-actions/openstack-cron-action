@@ -32,7 +32,7 @@ inputs:
     required: false
     default: ''
   openstack_password:
-    description: 'OpenStack password'
+    description: 'OpenStack password (base64 encoded or plain text - will auto-decode)'
     required: false
     default: ''
   openstack_project_id:
@@ -197,7 +197,13 @@ runs:
           cloud_name="${{ inputs.openstack_cloud }}"
           auth_url="${{ inputs.openstack_auth_url }}"
           username="${{ inputs.openstack_username }}"
+          
+          # Decode password if base64 encoded (silent for security)
           password="${{ inputs.openstack_password }}"
+          if printf '%s' "$password" | base64 -d &> /dev/null; then
+            password=$(printf '%s' "$password" | base64 -d)
+          fi
+          
           project_id="${{ inputs.openstack_project_id }}"
           domain_name="${{ inputs.openstack_domain_name }}"
           region="${{ inputs.openstack_region }}"
