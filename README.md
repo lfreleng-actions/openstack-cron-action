@@ -449,3 +449,41 @@ The workflow includes an email notification step that sends emails on failure us
 - Notifications sent **only on failure**
 - No emails sent on success
 - Matches Jenkins `global-jjb-email-notification` behavior
+
+## Debug Mode
+
+By default, the action runs in quiet mode with minimal output. To enable verbose debug logging:
+
+```yaml
+- uses: askb/openstack-cron-action@main
+  with:
+    enable_debug: true  # Enable verbose debug logging
+    # ... other inputs
+```
+
+**Debug mode output**: Shows detailed information about each operation
+**Quiet mode output** (default): Shows only summaries (e.g., "✅ Deleted 3 servers: prd-123, snd-456, bastion-gh-789")
+
+## Cleanup Summary
+
+The action automatically generates a cleanup summary that appears in the GitHub Actions UI:
+
+```markdown
+### 🧹 OpenStack Cleanup Summary
+
+**Cloud**: vex  
+**Status**: ✅ Completed  
+**Timestamp**: 2026-01-20 08:00:00 UTC
+
+#### Resources Cleaned
+- 🔄 K8s Clusters: 0 deleted
+- 📚 Heat Stacks: 1 deleted
+- 🖥️ Servers: 3 deleted
+- 🔌 Ports: 8 deleted
+- 💾 Volumes: 2 deleted
+- 🛡️ Images Protected: 150 images
+- 🗑️ Old Images: 5 deleted
+
+**Total Resources Cleaned**: 19
+```
+

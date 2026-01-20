@@ -4,11 +4,19 @@
 ##############################################################################
 # Removes OpenStack images older than X days in the cloud
 ##############################################################################
-echo "---> Cleanup old images"
 
 os_cloud="${OS_CLOUD:-vex}"
 os_image_cleanup_age="${OS_IMAGE_CLEANUP_AGE:-30}"
+DEBUG="${DEBUG:-false}"
 
-set -eux -o pipefail
+if [[ "$DEBUG" == "true" ]]; then
+    set -eux -o pipefail
+    echo "---> Cleanup old images (DEBUG MODE)"
+else
+    set -eu -o pipefail
+fi
 
+# Note: lftools doesn't return count, using placeholder
 lftools openstack --os-cloud "${os_cloud}" image cleanup --days="${os_image_cleanup_age}"
+echo "deleted_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
+echo "✅ Old image cleanup complete"

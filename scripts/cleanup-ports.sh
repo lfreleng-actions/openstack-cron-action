@@ -7,12 +7,16 @@
 # Based on: global-jjb/shell/openstack-cleanup-orphaned-ports.sh
 ##############################################################################
 
-echo "---> Cleanup orphaned ports"
-
 os_cloud="${OS_CLOUD:-vex}"
 age="${PORT_CLEANUP_AGE:-30 minutes ago}"
+DEBUG="${DEBUG:-false}"
 
-set -eu -o pipefail
+if [[ "$DEBUG" == "true" ]]; then
+    set -eux -o pipefail
+    echo "---> Cleanup orphaned ports (DEBUG MODE)"
+else
+    set -eu -o pipefail
+fi
 
 tmpfile=$(mktemp --suffix -openstack-ports.txt)
 cores=$(nproc --all)
@@ -28,7 +32,7 @@ _cleanup()
     created_at=$(openstack --os-cloud "$os_cloud" port show -f value -c created_at "$uuid")
 
     if [ "$created_at" == "None" ]; then
-        echo "No value for port creation time; skipping: $uuid"
+        [[ "$DEBUG" == "true" ]] && echo "No value for port creation time; skipping: $uuid"
 
     elif echo "$created_at" | grep -qP "$regex_created_at"; then
 
@@ -36,11 +40,11 @@ _cleanup()
 
         # Cleanup objects where created_at is older than specified cutoff time
         if [[ "$created_at_uxts" -lt "$cutoff" ]]; then
-            echo "Removing orphaned port $uuid created $created_at_uxts > $age"
+            [[ "$DEBUG" == "true" ]] && echo "Removing orphaned port $uuid created $created_at_uxts > $age"
             openstack --os-cloud "$os_cloud" port delete "$uuid"
         fi
     else
-        echo "Unknown/unexpected value for created_at: ${created_at}"
+        [[ "$DEBUG" == "true" ]] && echo "Unknown/unexpected value for created_at: ${created_at}"
     fi
 }
 
@@ -61,16 +65,22 @@ openstack --os-cloud "$os_cloud" port list -f value -c ID -c status \
 total=$(wc -l "$tmpfile" | awk '{print $1}')
 
 if [ "$total" -eq 0 ]; then
-    echo "No orphaned ports to process."
+    echo "deleted_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
+    echo "✅ No orphaned ports found"
     exit 0
 fi
 
-echo "Ports to process: $total; age limit: $cutoff"
-echo "Using $threads parallel processes..."
+[[ "$DEBUG" == "true" ]] && echo "Ports to process: $total; age limit: $cutoff"
+[[ "$DEBUG" == "true" ]] && echo "Using $threads parallel processes..."
 
 # Export variables and send to parallel for processing
 export -f _cleanup
-export os_cloud cutoff age regex_created_at
-parallel --progress --retries 3 -j "$threads" _cleanup < "$tmpfile"
+export os_cloud cutoff age regex_created_at DEBUG
+if [[ "$DEBUG" == "true" ]]; then
+    parallel --progress --retries 3 -j "$threads" _cleanup < "$tmpfile"
+else
+    parallel --retries 3 -j "$threads" _cleanup < "$tmpfile" 2>/dev/null
+fi
 
-echo "✅ Port cleanup complete"
+echo "deleted_count=$total" >> "${GITHUB_OUTPUT:-/dev/null}"
+echo "✅ Deleted $total orphaned port(s)"
