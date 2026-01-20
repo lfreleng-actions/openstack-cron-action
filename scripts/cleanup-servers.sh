@@ -57,7 +57,7 @@ minion_in_jenkins() {
 }
 
 # Fetch server list before checking active minions to minimize race condition
-mapfile -t OS_SERVERS < <(openstack --os-cloud "$os_cloud" server list -f value -c "Name" | grep -E 'prd|snd')
+mapfile -t OS_SERVERS < <(openstack --os-cloud "$os_cloud" server list -f value -c "Name" | grep -E 'prd|snd|bastion-gh')
 
 echo "INFO: Found ${#OS_SERVERS[@]} servers"
 
