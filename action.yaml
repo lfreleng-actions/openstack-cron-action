@@ -91,11 +91,16 @@ inputs:
     required: false
     default: 'true'
 
+  cleanup_images_smart:
+    description: 'Enable smart image cleanup (checks repo for images in use)'
+    required: false
+    default: 'false'
+
   # Cleanup Parameters
   image_cleanup_age:
-    description: 'Age in days for image cleanup (default: 30)'
+    description: 'Age in days for image cleanup (default: 180 = 6 months)'
     required: false
-    default: '30'
+    default: '180'
 
   port_cleanup_age:
     description: 'Age for port cleanup (default: 30 minutes ago)'
@@ -138,6 +143,10 @@ outputs:
   cleanup_status:
     description: 'Overall cleanup status (success/failure)'
     value: ${{ steps.summary.outputs.status }}
+
+  smart_cleanup_unprotected:
+    description: 'Number of images unprotected by smart cleanup'
+    value: ${{ steps.cleanup-images-smart.outputs.unprotected_count || '0' }}
 
 runs:
   using: 'composite'
@@ -197,17 +206,17 @@ runs:
           cloud_name="${{ inputs.openstack_cloud }}"
           auth_url="${{ inputs.openstack_auth_url }}"
           username="${{ inputs.openstack_username }}"
-          
+
           # Decode password if base64 encoded (silent for security)
           password="${{ inputs.openstack_password }}"
           if printf '%s' "$password" | base64 -d &> /dev/null; then
             password=$(printf '%s' "$password" | base64 -d)
           fi
-          
+
           project_id="${{ inputs.openstack_project_id }}"
           domain_name="${{ inputs.openstack_domain_name }}"
           region="${{ inputs.openstack_region }}"
-          
+
           cat > "$HOME/.config/openstack/clouds.yaml" << EOF
         clouds:
           ${cloud_name}:
@@ -240,6 +249,13 @@ runs:
         echo "JENKINS_URLS=${{ inputs.jenkins_urls }}" >> "$GITHUB_ENV"
         age="${{ inputs.image_cleanup_age }}"
         echo "OS_IMAGE_CLEANUP_AGE=$age" >> "$GITHUB_ENV"
+        echo "DEBUG=${{ inputs.enable_debug }}" >> "$GITHUB_ENV"
+
+        # Auto-detect repo URL from GitHub context
+        if [[ -n "${{ github.repository }}" ]]; then
+          echo "BUILDER_REPO_URL=https://github.com/${{ github.repository }}" >> "$GITHUB_ENV"
+          echo "GITHUB_REPOSITORY=${{ github.repository }}" >> "$GITHUB_ENV"
+        fi
 
     - name: Cleanup K8s Clusters
       if: ${{ inputs.cleanup_k8s_clusters == 'true' }}
@@ -286,15 +302,68 @@ runs:
 
     - name: Cleanup Old Images
       if: ${{ inputs.cleanup_images == 'true' }}
+      id: cleanup-images
       shell: bash
       run: |
         echo "🧹 Cleaning up old images..."
         bash "${{ github.action_path }}/scripts/cleanup-old-images.sh"
 
+    - name: Smart Image Cleanup
+      if: ${{ inputs.cleanup_images_smart == 'true' }}
+      id: cleanup-images-smart
+      shell: bash
+      run: |
+        echo "🧠 Running smart image cleanup..."
+        bash "${{ github.action_path }}/scripts/cleanup-images-smart.sh"
+
     - name: Generate cleanup summary
+      if: always()
       id: summary
       shell: bash
       run: |
-        echo "summary=Cleanup completed successfully" >> "$GITHUB_OUTPUT"
-        echo "resources_cleaned=0" >> "$GITHUB_OUTPUT"
+        # Collect outputs from all steps
+        k8s_count="${{ steps.cleanup-k8s.outputs.deleted_count || '0' }}"
+        stacks_count="${{ steps.cleanup-stacks.outputs.deleted_count || '0' }}"
+        servers_count="${{ steps.cleanup-servers.outputs.deleted_count || '0' }}"
+        ports_count="${{ steps.cleanup-ports.outputs.deleted_count || '0' }}"
+        volumes_count="${{ steps.cleanup-volumes.outputs.deleted_count || '0' }}"
+        protected_count="${{ steps.protect-images.outputs.protected_count || '0' }}"
+        images_count="${{ steps.cleanup-images.outputs.deleted_count || '0' }}"
+        smart_unprotected="${{ steps.cleanup-images-smart.outputs.unprotected_count || '0' }}"
+
+        total=$((k8s_count + stacks_count + servers_count + ports_count + volumes_count + images_count))
+
+        # Generate summary for GitHub Actions UI
+        cat >> "$GITHUB_STEP_SUMMARY" << EOF
+        ### 🧹 OpenStack Cleanup Summary
+
+        **Cloud**: ${{ inputs.openstack_cloud }}
+        **Status**: ✅ Completed
+        **Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+        #### Resources Cleaned
+        - 🔄 K8s Clusters: **${k8s_count}** deleted
+        - 📚 Heat Stacks: **${stacks_count}** deleted
+        - 🖥️ Servers: **${servers_count}** deleted
+        - 🔌 Ports: **${ports_count}** deleted
+        - 💾 Volumes: **${volumes_count}** deleted
+        - 🛡️ Images Protected: **${protected_count}** images
+        - 🗑️ Old Images: **${images_count}** deleted
+        EOF
+
+        # Add smart cleanup info if it ran
+        if [[ "${{ inputs.cleanup_images_smart }}" == "true" ]]; then
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+        - 🧠 Smart Cleanup: **${smart_unprotected}** images unprotected
+        EOF
+        fi
+
+        cat >> "$GITHUB_STEP_SUMMARY" << EOF
+
+        **Total Resources Cleaned**: **${total}**
+        EOF
+
+        # Set outputs
+        echo "summary=Cleaned ${total} resources" >> "$GITHUB_OUTPUT"
+        echo "resources_cleaned=${total}" >> "$GITHUB_OUTPUT"
         echo "status=success" >> "$GITHUB_OUTPUT"
