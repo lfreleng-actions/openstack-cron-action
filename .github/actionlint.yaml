@@ -1,0 +1,10 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+
+# Path-specific configurations for actionlint
+# Add ignored rules per workflow file as needed
+# paths:
+#   .github/workflows/testing.yaml:
+#     ignore:
+#       - 'example rule to ignore'
