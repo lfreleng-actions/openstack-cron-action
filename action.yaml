@@ -295,6 +295,7 @@ runs:
 
     - name: Protect Images
       if: ${{ inputs.protect_images == 'true' }}
+      id: protect-images
       shell: bash
       run: |
         echo "🛡️ Protecting in-use images..."

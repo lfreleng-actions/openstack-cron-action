@@ -18,9 +18,35 @@ else
     set -eu -o pipefail
 fi
 
-# Get list of all CI-managed images (prefixed with "ZZCI - ")
-mapfile -t images < <(openstack --os-cloud "$os_cloud" image list \
-    -f value -c Name | grep "^ZZCI - " | sort -u)
+# Test OpenStack connectivity before processing
+if [[ "$DEBUG" == "true" ]]; then
+    echo "INFO: Testing OpenStack connectivity..."
+fi
+
+if ! openstack --os-cloud "$os_cloud" token issue &>/dev/null; then
+    echo "❌ ERROR: OpenStack authentication failed or API unavailable"
+    echo "protected_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
+    exit 1
+fi
+
+[[ "$DEBUG" == "true" ]] && echo "INFO: OpenStack authentication successful"
+
+# Get list of all CI-managed images (prefixed with "ZZCI - ") with retry logic
+for attempt in {1..3}; do
+    if mapfile -t images < <(openstack --os-cloud "$os_cloud" image list \
+        -f value -c Name 2>&1 | grep "^ZZCI - " | sort -u); then
+        break
+    else
+        if [[ $attempt -lt 3 ]]; then
+            echo "⚠️  Warning: Image list attempt $attempt failed, retrying in 5s..."
+            sleep 5
+        else
+            echo "❌ ERROR: Failed to retrieve image list after 3 attempts"
+            echo "protected_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
+            exit 1
+        fi
+    fi
+done
 
 if [[ ${#images[@]} -eq 0 ]]; then
     echo "protected_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
@@ -31,6 +57,7 @@ fi
 [[ "$DEBUG" == "true" ]] && echo "INFO: Found ${#images[@]} ZZCI images to check for protection"
 
 protected_count=0
+failed_count=0
 for image in "${images[@]}"; do
     os_image_protected=$(openstack --os-cloud "$os_cloud" \
         image show "$image" -f value -c protected 2>/dev/null || echo "False")
@@ -41,10 +68,20 @@ for image in "${images[@]}"; do
 
     if [[ $os_image_protected != "True" ]]; then
         [[ "$DEBUG" == "true" ]] && echo "    Image NOT set as protected, changing the protected value."
-        openstack --os-cloud "$os_cloud" image set --protected "$image"
+        if openstack --os-cloud "$os_cloud" image set --protected "$image" 2>&1; then
+            ((protected_count++))
+        else
+            echo "⚠️  Warning: Failed to protect image: $image"
+            ((failed_count++))
+        fi
+    else
+        ((protected_count++))
     fi
-    ((protected_count++))
 done
+
+if [[ $failed_count -gt 0 ]]; then
+    echo "⚠️  Warning: Failed to protect $failed_count image(s)"
+fi
 
 echo "protected_count=$protected_count" >> "${GITHUB_OUTPUT:-/dev/null}"
 echo "✅ Protected $protected_count image(s)"
