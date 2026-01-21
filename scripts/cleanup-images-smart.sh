@@ -55,11 +55,13 @@ image_count_rst=$(wc -l < "$tmpdir/images-in-rst.txt")
 # Clone repo to scan JJB configs (shallow clone for speed)
 if git clone --depth 1 --single-branch "$repo_url" "$tmpdir/repo" &>/dev/null; then
     # Search for image names in JJB YAML files
-    find "$tmpdir/repo/jjb" -name "*.yaml" -o -name "*.yml" 2>/dev/null | while read -r file; do
-        # Look for image references (various patterns)
-        grep -oP '(image|builder-image|base-image|cloud-image):\s*["\']?ZZCI[^"'\'']*' "$file" 2>/dev/null || true
-    done | sed 's/.*ZZCI/ZZCI/' | sed 's/["\'\'' ]//g' | sort -u >> "$tmpdir/images-in-jjb.txt"
-    
+    {
+        find "$tmpdir/repo/jjb" -name "*.yaml" -o -name "*.yml" 2>/dev/null | while read -r file; do
+            # Look for image references (various patterns)
+            grep -oP '(image|builder-image|base-image|cloud-image):\s*["\']?ZZCI[^"'\'']*' "$file" 2>/dev/null || true
+        done
+    } | sed 's/.*ZZCI/ZZCI/' | sed 's/["\'\'' ]//g' | sort -u >> "$tmpdir/images-in-jjb.txt"
+
     image_count_jjb=$(wc -l < "$tmpdir/images-in-jjb.txt" 2>/dev/null || echo 0)
     [[ "$DEBUG" == "true" ]] && echo "INFO: Found $image_count_jjb additional images in JJB configs"
 else
