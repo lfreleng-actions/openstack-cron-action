@@ -5,21 +5,26 @@
 # Scans OpenStack for orphaned volumes and removes them
 ##############################################################################
 
-echo "---> Cleanup orphaned volumes"
-
 os_cloud="${OS_CLOUD:-vex}"
+DEBUG="${DEBUG:-false}"
 
-set -eux -o pipefail
+if [[ "$DEBUG" == "true" ]]; then
+    set -eux -o pipefail
+    echo "---> Cleanup orphaned volumes (DEBUG MODE)"
+else
+    set -eu -o pipefail
+fi
 
 mapfile -t os_volumes < <(openstack --os-cloud "$os_cloud" volume list -f value -c ID --status Available)
 
 if [[ ${#os_volumes[@]} -eq 0 ]]; then
-    echo "No available volumes to delete"
+    echo "deleted_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
+    echo "✅ No orphaned volumes found"
 else
     for volume in "${os_volumes[@]}"; do
-        echo "Deleting volume: $volume"
+        [[ "$DEBUG" == "true" ]] && echo "Deleting volume: $volume"
         openstack --os-cloud "$os_cloud" volume delete "$volume"
     done
+    echo "deleted_count=${#os_volumes[@]}" >> "${GITHUB_OUTPUT:-/dev/null}"
+    echo "✅ Deleted ${#os_volumes[@]} orphaned volume(s)"
 fi
-
-echo "✅ Volume cleanup complete"

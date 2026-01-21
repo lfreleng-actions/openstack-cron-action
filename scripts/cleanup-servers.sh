@@ -7,21 +7,31 @@
 # Based on: global-jjb/shell/openstack-cleanup-orphaned-servers.sh
 ##############################################################################
 
-echo "---> Cleanup orphaned servers"
-
 os_cloud="${OS_CLOUD:-vex}"
 jenkins_urls="${JENKINS_URLS:-}"
+DEBUG="${DEBUG:-false}"
 
-set -eux -o pipefail
+# Set verbose mode only if debug enabled
+if [[ "$DEBUG" == "true" ]]; then
+    set -eux -o pipefail
+    echo "---> Cleanup orphaned servers (DEBUG MODE)"
+else
+    set -eu -o pipefail
+fi
 
-echo "INFO: Checking for orphaned servers on cloud: $os_cloud"
+if [[ "$DEBUG" == "true" ]]; then
+    echo "INFO: Checking for orphaned servers on cloud: $os_cloud"
+fi
 
 if [[ -z "$jenkins_urls" ]]; then
-    echo "WARN: No Jenkins URLs provided, skipping server cleanup to be safe"
+    echo "⚠️  No Jenkins URLs provided, skipping server cleanup"
+    echo "deleted_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
     exit 0
 fi
 
-echo "INFO: Will check Jenkins URLs for active builds: $jenkins_urls"
+if [[ "$DEBUG" == "true" ]]; then
+    echo "INFO: Will check Jenkins URLs for active builds: $jenkins_urls"
+fi
 
 minion_in_jenkins() {
     # Usage: minion_in_jenkins MINION JENKINS_URL [JENKINS_URL...]
@@ -59,22 +69,42 @@ minion_in_jenkins() {
 # Fetch server list before checking active minions to minimize race condition
 mapfile -t OS_SERVERS < <(openstack --os-cloud "$os_cloud" server list -f value -c "Name" | grep -E 'prd|snd|bastion-gh')
 
-echo "INFO: Found ${#OS_SERVERS[@]} servers"
+if [[ "$DEBUG" == "true" ]]; then
+    echo "INFO: Found ${#OS_SERVERS[@]} servers to check"
+fi
 
 # Search for servers not in use by any active Jenkins systems and remove them.
 deleted_count=0
+deleted_servers=()
 for server in "${OS_SERVERS[@]}"; do
     # jenkins_urls intentionally needs globbing to be passed as separate params.
     # shellcheck disable=SC2153,SC2086
     if minion_in_jenkins "$server" $jenkins_urls; then
-        echo "INFO: Server $server is in use, skipping"
+        if [[ "$DEBUG" == "true" ]]; then
+            echo "INFO: Server $server is in use, skipping"
+        fi
         continue
     else
-        echo "INFO: Deleting orphaned server: $server"
+        if [[ "$DEBUG" == "true" ]]; then
+            echo "INFO: Deleting orphaned server: $server"
+        fi
         lftools openstack --os-cloud "$os_cloud" \
             server remove --minutes 15 "$server"
+        deleted_servers+=("$server")
         ((deleted_count++))
     fi
 done
 
-echo "✅ Server cleanup complete - deleted $deleted_count orphaned server(s)"
+# Output for GitHub Actions
+echo "deleted_count=$deleted_count" >> "${GITHUB_OUTPUT:-/dev/null}"
+
+# Summary output (always shown)
+if [[ $deleted_count -gt 0 ]]; then
+    if [[ "$DEBUG" == "false" ]]; then
+        echo "✅ Deleted $deleted_count server(s): ${deleted_servers[*]}"
+    else
+        echo "✅ Server cleanup complete - deleted $deleted_count server(s)"
+    fi
+else
+    echo "✅ No orphaned servers found"
+fi
