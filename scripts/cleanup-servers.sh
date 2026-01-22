@@ -88,10 +88,18 @@ for server in "${OS_SERVERS[@]}"; do
         if [[ "$DEBUG" == "true" ]]; then
             echo "INFO: Deleting orphaned server: $server"
         fi
-        lftools openstack --os-cloud "$os_cloud" \
-            server remove --minutes 15 "$server"
-        deleted_servers+=("$server")
-        ((deleted_count++)) || true
+        if lftools openstack --os-cloud "$os_cloud" \
+            server remove --minutes 15 "$server" 2>&1; then
+            deleted_servers+=("$server")
+            ((deleted_count++)) || true
+        else
+            exit_code=$?
+            if [[ "$DEBUG" == "true" ]]; then
+                echo "⚠️  Warning: Failed to delete server $server (exit code: $exit_code)"
+                echo "   Server may have already been deleted"
+            fi
+            # Don't fail entire cleanup if one server fails
+        fi
     fi
 done
 
