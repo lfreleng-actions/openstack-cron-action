@@ -91,7 +91,7 @@ for server in "${OS_SERVERS[@]}"; do
         lftools openstack --os-cloud "$os_cloud" \
             server remove --minutes 15 "$server"
         deleted_servers+=("$server")
-        ((deleted_count++))
+        ((deleted_count++)) || true
     fi
 done
 
