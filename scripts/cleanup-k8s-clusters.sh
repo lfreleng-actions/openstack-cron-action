@@ -83,7 +83,7 @@ for cluster in "${OS_COE_CLUSTERS[@]}"; do
         [[ "$DEBUG" == "true" ]] && echo "INFO: Deleting orphaned cluster: $cluster"
         lftools openstack --os-cloud "$os_cloud" cluster delete --minutes 15 "$cluster"
         deleted_clusters+=("$cluster")
-        ((deleted_count++))
+        ((deleted_count++)) || true
     fi
 done
 

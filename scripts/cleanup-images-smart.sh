@@ -126,7 +126,7 @@ while read -r image; do
         
         openstack --os-cloud "$os_cloud" image set --unprotected "$image"
         unprotected_images+=("$image")
-        ((unprotected_count++))
+        ((unprotected_count++)) || true
     else
         [[ "$DEBUG" == "true" ]] && echo "INFO: Image already unprotected: $image"
     fi

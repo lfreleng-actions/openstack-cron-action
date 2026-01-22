@@ -74,13 +74,13 @@ for image in "${images[@]}"; do
     if [[ $os_image_protected != "True" ]]; then
         [[ "$DEBUG" == "true" ]] && echo "    Image NOT set as protected, changing the protected value."
         if openstack --os-cloud "$os_cloud" image set --protected "$image" 2>&1; then
-            ((protected_count++))
+            ((protected_count++)) || true
         else
             echo "⚠️  Warning: Failed to protect image: $image"
-            ((failed_count++))
+            ((failed_count++)) || true
         fi
     else
-        ((protected_count++))
+        ((protected_count++)) || true
     fi
 done
 
