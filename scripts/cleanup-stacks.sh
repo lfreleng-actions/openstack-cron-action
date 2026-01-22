@@ -29,10 +29,18 @@ if [[ -n "$jenkins_urls" ]]; then
     fi
     # lftools stack delete-stale takes jenkins URLs as positional arguments
     # shellcheck disable=SC2086
-    lftools openstack --os-cloud "$os_cloud" stack delete-stale $jenkins_urls
-    # Note: lftools doesn't return count, so we set a placeholder
-    echo "deleted_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
-    echo "✅ Stack cleanup complete"
+    if lftools openstack --os-cloud "$os_cloud" stack delete-stale $jenkins_urls; then
+        # Note: lftools doesn't return count, so we set a placeholder
+        echo "deleted_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
+        echo "✅ Stack cleanup complete"
+    else
+        exit_code=$?
+        echo "⚠️  Stack cleanup failed with exit code $exit_code"
+        echo "⚠️  Known issue: lftools delete() method signature mismatch"
+        echo "deleted_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
+        # Don't fail the entire workflow for this known issue
+        exit 0
+    fi
 else
     echo "⚠️  No Jenkins URLs provided, skipping stack cleanup"
     echo "deleted_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
