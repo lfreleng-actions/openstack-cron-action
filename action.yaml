@@ -119,6 +119,12 @@ inputs:
     required: false
     default: '10'
 
+  # Debug Mode
+  enable_debug:
+    description: 'Enable debug mode for verbose logging'
+    required: false
+    default: 'false'
+
   # Notifications
   failure_notification_email:
     description: >
