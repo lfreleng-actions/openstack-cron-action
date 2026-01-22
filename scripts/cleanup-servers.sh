@@ -66,8 +66,9 @@ minion_in_jenkins() {
     return 1
 }
 
-# Fetch server list before checking active minions to minimize race condition
-mapfile -t OS_SERVERS < <(openstack --os-cloud "$os_cloud" server list -f value -c "Name" | grep -E 'prd|snd|bastion-gh')
+# Fetch server list with both ID and Name to handle duplicates
+# Format: "server-id server-name"
+mapfile -t OS_SERVERS < <(openstack --os-cloud "$os_cloud" server list -f value -c "ID" -c "Name" | grep -E 'prd|snd|bastion-gh')
 
 if [[ "$DEBUG" == "true" ]]; then
     echo "INFO: Found ${#OS_SERVERS[@]} servers to check"
@@ -76,26 +77,31 @@ fi
 # Search for servers not in use by any active Jenkins systems and remove them.
 deleted_count=0
 deleted_servers=()
-for server in "${OS_SERVERS[@]}"; do
+for server_line in "${OS_SERVERS[@]}"; do
+    # Parse ID and Name from line
+    server_id=$(echo "$server_line" | awk '{print $1}')
+    server_name=$(echo "$server_line" | awk '{$1=""; print $0}' | sed 's/^ //')
+    
     # jenkins_urls intentionally needs globbing to be passed as separate params.
     # shellcheck disable=SC2153,SC2086
-    if minion_in_jenkins "$server" $jenkins_urls; then
+    if minion_in_jenkins "$server_name" $jenkins_urls; then
         if [[ "$DEBUG" == "true" ]]; then
-            echo "INFO: Server $server is in use, skipping"
+            echo "INFO: Server $server_name (ID: $server_id) is in use, skipping"
         fi
         continue
     else
         if [[ "$DEBUG" == "true" ]]; then
-            echo "INFO: Deleting orphaned server: $server"
+            echo "INFO: Deleting orphaned server: $server_name (ID: $server_id)"
         fi
+        # Use server ID instead of name to avoid duplicate name issues
         if lftools openstack --os-cloud "$os_cloud" \
-            server remove --minutes 15 "$server" 2>&1; then
-            deleted_servers+=("$server")
+            server remove --minutes 15 "$server_id" 2>&1; then
+            deleted_servers+=("$server_name")
             ((deleted_count++)) || true
         else
             exit_code=$?
             if [[ "$DEBUG" == "true" ]]; then
-                echo "⚠️  Warning: Failed to delete server $server (exit code: $exit_code)"
+                echo "⚠️  Warning: Failed to delete server $server_name (ID: $server_id) (exit code: $exit_code)"
                 echo "   Server may have already been deleted"
             fi
             # Don't fail entire cleanup if one server fails
