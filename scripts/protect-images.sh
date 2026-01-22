@@ -23,7 +23,12 @@ if [[ "$DEBUG" == "true" ]]; then
     echo "INFO: Testing OpenStack connectivity..."
 fi
 
-if ! openstack --os-cloud "$os_cloud" token issue &>/dev/null; then
+set +e  # Temporarily disable exit on error for auth test
+openstack --os-cloud "$os_cloud" token issue &>/dev/null
+auth_result=$?
+set -e  # Re-enable exit on error
+
+if [[ $auth_result -ne 0 ]]; then
     echo "❌ ERROR: OpenStack authentication failed or API unavailable"
     echo "protected_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
     exit 1
