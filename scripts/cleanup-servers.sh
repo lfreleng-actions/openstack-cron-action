@@ -33,6 +33,24 @@ if [[ "$DEBUG" == "true" ]]; then
     echo "INFO: Will check Jenkins URLs for active builds: $jenkins_urls"
 fi
 
+# Helper function to check server age
+is_server_old_enough() {
+    local server_id=$1
+    local minutes=$2
+    
+    # Get server creation time
+    created_at=$(openstack --os-cloud "$os_cloud" server show "$server_id" -f value -c created)
+    created_epoch=$(date -d "$created_at" +%s)
+    now_epoch=$(date +%s)
+    age_minutes=$(( (now_epoch - created_epoch) / 60 ))
+    
+    if [[ $age_minutes -ge $minutes ]]; then
+        return 0  # Old enough
+    else
+        return 1  # Too new
+    fi
+}
+
 minion_in_jenkins() {
     # Usage: minion_in_jenkins MINION JENKINS_URL [JENKINS_URL...]
     # Returns: 0 If minion is in Jenkins and 1 if minion is not in Jenkins.
@@ -93,18 +111,28 @@ for server_line in "${OS_SERVERS[@]}"; do
         if [[ "$DEBUG" == "true" ]]; then
             echo "INFO: Deleting orphaned server: $server_name (ID: $server_id)"
         fi
-        # Use server ID instead of name to avoid duplicate name issues
-        if lftools openstack --os-cloud "$os_cloud" \
-            server remove --minutes 15 "$server_id" 2>&1; then
-            deleted_servers+=("$server_name")
-            ((deleted_count++)) || true
-        else
-            exit_code=$?
-            if [[ "$DEBUG" == "true" ]]; then
-                echo "⚠️  Warning: Failed to delete server $server_name (ID: $server_id) (exit code: $exit_code)"
-                echo "   Server may have already been deleted"
+        
+        # Check if server is old enough (15 minutes minimum)
+        if is_server_old_enough "$server_id" 15; then
+            # Use OpenStack CLI directly instead of lftools to avoid duplicate name issues
+            if openstack --os-cloud "$os_cloud" server delete "$server_id" 2>&1; then
+                deleted_servers+=("$server_name")
+                ((deleted_count++)) || true
+                if [[ "$DEBUG" == "true" ]]; then
+                    echo "INFO: Successfully deleted server $server_name (ID: $server_id)"
+                fi
+            else
+                exit_code=$?
+                if [[ "$DEBUG" == "true" ]]; then
+                    echo "⚠️  Warning: Failed to delete server $server_name (ID: $server_id) (exit code: $exit_code)"
+                    echo "   Server may have already been deleted"
+                fi
+                # Don't fail entire cleanup if one server fails
             fi
-            # Don't fail entire cleanup if one server fails
+        else
+            if [[ "$DEBUG" == "true" ]]; then
+                echo "INFO: Server $server_name (ID: $server_id) is too new (< 15 minutes), skipping"
+            fi
         fi
     fi
 done
