@@ -353,8 +353,8 @@ runs:
           echo '${{ steps.cleanup-images.outputs.deleted_count || '0' }}'
         )"
         smart_unprotected="$(
-          # shellcheck disable=SC2016
-          echo '${{ steps.cleanup-images-smart.outputs.unprotected_count || '"'"'0'"'"' }}'
+          val='${{ steps.cleanup-images-smart.outputs.unprotected_count }}'
+          echo "${val:-0}"
         )"
 
         sum1=$((k8s_count + stacks_count + servers_count))
