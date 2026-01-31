@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+
+# Disable line length rule for code examples and long URLs
+MD013: false
+
+# Allow duplicate headings (needed for sections like "Jenkins Integration")
+MD024: false

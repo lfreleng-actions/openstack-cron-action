@@ -25,8 +25,9 @@ jobs:
 
       - name: Download actionlint
         run: |
-          # yamllint disable-line rule:line-length
-          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          url="https://raw.githubusercontent.com/rhysd/actionlint"
+          url="$url/main/scripts/download-actionlint.bash"
+          bash <(curl "$url")
           echo "${PWD}" >> "${GITHUB_PATH}"
 
       - name: Run actionlint

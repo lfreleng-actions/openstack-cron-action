@@ -37,13 +37,13 @@ fi
 is_server_old_enough() {
     local server_id=$1
     local minutes=$2
-    
+
     # Get server creation time
     created_at=$(openstack --os-cloud "$os_cloud" server show "$server_id" -f value -c created)
     created_epoch=$(date -d "$created_at" +%s)
     now_epoch=$(date +%s)
     age_minutes=$(( (now_epoch - created_epoch) / 60 ))
-    
+
     if [[ $age_minutes -ge $minutes ]]; then
         return 0  # Old enough
     else
@@ -99,7 +99,7 @@ for server_line in "${OS_SERVERS[@]}"; do
     # Parse ID and Name from line
     server_id=$(echo "$server_line" | awk '{print $1}')
     server_name=$(echo "$server_line" | awk '{$1=""; print $0}' | sed 's/^ //')
-    
+
     # jenkins_urls intentionally needs globbing to be passed as separate params.
     # shellcheck disable=SC2153,SC2086
     if minion_in_jenkins "$server_name" $jenkins_urls; then
@@ -111,7 +111,7 @@ for server_line in "${OS_SERVERS[@]}"; do
         if [[ "$DEBUG" == "true" ]]; then
             echo "INFO: Deleting orphaned server: $server_name (ID: $server_id)"
         fi
-        
+
         # Check if server is old enough (15 minutes minimum)
         if is_server_old_enough "$server_id" 15; then
             # Use OpenStack CLI directly instead of lftools to avoid duplicate name issues
