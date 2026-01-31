@@ -32,7 +32,8 @@ inputs:
     required: false
     default: ''
   openstack_password:
-    description: 'OpenStack password (base64 encoded or plain text - will auto-decode)'
+    description: |
+      OpenStack password (base64 encoded or plain text - will auto-decode)
     required: false
     default: ''
   openstack_project_id:
@@ -166,15 +167,18 @@ runs:
         fi
 
         # Validate that either clouds_yaml OR credentials are provided
-        if [[ -z "${{ inputs.clouds_yaml }}" ]] && [[ -z "${{ inputs.openstack_auth_url }}" ]]; then
+        if [[ -z "${{ inputs.clouds_yaml }}" ]] && \
+           [[ -z "${{ inputs.openstack_auth_url }}" ]]; then
           echo "❌ Error: Either clouds_yaml or OpenStack credentials required"
-          echo "   Provide clouds_yaml OR (auth_url + username + password + project_id)"
+          echo "   Provide clouds_yaml OR" \
+            "(auth_url + username + password + project_id)"
           exit 1
         fi
 
         echo "✅ Input validation passed"
 
     - name: Setup Python
+      # yamllint disable-line rule:line-length
       uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
       with:
         python-version: ${{ inputs.python_version }}
@@ -208,7 +212,8 @@ runs:
           echo "✅ Using provided clouds.yaml"
         elif [[ -n "${{ inputs.openstack_auth_url }}" ]]; then
           # Auto-generate clouds.yaml from individual credentials
-          # Assign to shell variables to avoid any issues with GitHub Actions variable expansion
+          # Assign to shell variables to avoid any issues with GitHub
+          # Actions variable expansion
           cloud_name="${{ inputs.openstack_cloud }}"
           auth_url="${{ inputs.openstack_auth_url }}"
           username="${{ inputs.openstack_username }}"
@@ -259,7 +264,8 @@ runs:
 
         # Auto-detect repo URL from GitHub context
         if [[ -n "${{ github.repository }}" ]]; then
-          echo "BUILDER_REPO_URL=https://github.com/${{ github.repository }}" >> "$GITHUB_ENV"
+          repo_url="https://github.com/${{ github.repository }}"
+          echo "BUILDER_REPO_URL=$repo_url" >> "$GITHUB_ENV"
           echo "GITHUB_REPOSITORY=${{ github.repository }}" >> "$GITHUB_ENV"
         fi
 
@@ -331,14 +337,29 @@ runs:
         # Collect outputs from all steps
         k8s_count="${{ steps.cleanup-k8s.outputs.deleted_count || '0' }}"
         stacks_count="${{ steps.cleanup-stacks.outputs.deleted_count || '0' }}"
-        servers_count="${{ steps.cleanup-servers.outputs.deleted_count || '0' }}"
-        ports_count="${{ steps.cleanup-ports.outputs.deleted_count || '0' }}"
-        volumes_count="${{ steps.cleanup-volumes.outputs.deleted_count || '0' }}"
-        protected_count="${{ steps.protect-images.outputs.protected_count || '0' }}"
-        images_count="${{ steps.cleanup-images.outputs.deleted_count || '0' }}"
-        smart_unprotected="${{ steps.cleanup-images-smart.outputs.unprotected_count || '0' }}"
+        servers_count="$(
+          echo '${{ steps.cleanup-servers.outputs.deleted_count || '0' }}'
+        )"
+        ports_count="$(
+          echo '${{ steps.cleanup-ports.outputs.deleted_count || '0' }}'
+        )"
+        volumes_count="$(
+          echo '${{ steps.cleanup-volumes.outputs.deleted_count || '0' }}'
+        )"
+        protected_count="$(
+          echo '${{ steps.protect-images.outputs.protected_count || '0' }}'
+        )"
+        images_count="$(
+          echo '${{ steps.cleanup-images.outputs.deleted_count || '0' }}'
+        )"
+        smart_unprotected="$(
+          # shellcheck disable=SC2016
+          echo '${{ steps.cleanup-images-smart.outputs.unprotected_count || '"'"'0'"'"' }}'
+        )"
 
-        total=$((k8s_count + stacks_count + servers_count + ports_count + volumes_count + images_count))
+        sum1=$((k8s_count + stacks_count + servers_count))
+        sum2=$((ports_count + volumes_count + images_count))
+        total=$((sum1 + sum2))
 
         # Generate summary for GitHub Actions UI
         cat >> "$GITHUB_STEP_SUMMARY" << EOF

@@ -75,7 +75,10 @@ This action performs hourly cleanup of orphaned resources in OpenStack clouds:
 | Input | Description | Example |
 |-------|-------------|---------|
 | `openstack_cloud` | OpenStack cloud name from clouds.yaml | `vex` |
-| `clouds_yaml` | OpenStack clouds.yaml configuration (base64 encoded) | `${{ secrets.OPENSTACK_CLOUDS_YAML }}` |
+| `clouds_yaml` | OpenStack clouds.yaml configuration | See below |
+
+**Default for `clouds_yaml`**: `${{ secrets.OPENSTACK_CLOUDS_YAML }}`
+(base64 encoded)
 
 ### Optional Inputs
 
@@ -312,11 +315,13 @@ This prevents accidental deletion of resources needed by running jobs.
 For project-agnostic deployments that can be shared across multiple projects:
 
 **DO** ✅:
+
 - Use `vars.JENKINS_URLS` instead of hard-coding Jenkins URLs
 - Use `vars.FAILURE_NOTIFICATION_EMAIL` for project-specific notifications
 - Use repository variables for any project-specific configuration
 
 **DON'T** ❌:
+
 - Hard-code project-specific values in workflow files
 - Embed organization-specific Jenkins URLs directly
 - Hard-code notification email addresses
@@ -324,6 +329,7 @@ For project-agnostic deployments that can be shared across multiple projects:
 ### Example: Multi-Project Setup
 
 **Project A (OpenDaylight)**:
+
 ```bash
 gh variable set JENKINS_URLS \
   --body "https://jenkins.opendaylight.org/releng https://jenkins.opendaylight.org/sandbox" \
@@ -335,6 +341,7 @@ gh variable set FAILURE_NOTIFICATION_EMAIL \
 ```
 
 **Project B (ONAP)**:
+
 ```bash
 gh variable set JENKINS_URLS \
   --body "https://jenkins.onap.org/ci" \
@@ -350,6 +357,7 @@ gh variable set FAILURE_NOTIFICATION_EMAIL \
 ### Workflow Design Patterns
 
 **Standalone Scheduled Job** (This action):
+
 - Uses `schedule` trigger for automatic hourly runs
 - Uses `workflow_dispatch` for manual testing
 - Does NOT use `workflow_call` (not called by other workflows)
@@ -363,6 +371,7 @@ on:
 ```
 
 **Reusable Workflow** (If you need to call from other workflows):
+
 - Would use `workflow_call` instead
 - Not applicable for this standalone cleanup job
 
@@ -462,17 +471,19 @@ By default, the action runs in quiet mode with minimal output. To enable verbose
 ```
 
 **Debug mode output**: Shows detailed information about each operation
-**Quiet mode output** (default): Shows only summaries (e.g., "✅ Deleted 3 servers: prd-123, snd-456, bastion-gh-789")
+**Quiet mode output** (default): Shows only summaries (e.g.,
+"✅ Deleted 3 servers: prd-123, snd-456, bastion-gh-789")
 
 ## Cleanup Summary
 
-The action automatically generates a cleanup summary that appears in the GitHub Actions UI:
+The action automatically generates a cleanup summary that appears in the
+GitHub Actions UI:
 
 ```markdown
 ### 🧹 OpenStack Cleanup Summary
 
-**Cloud**: vex  
-**Status**: ✅ Completed  
+**Cloud**: vex
+**Status**: ✅ Completed
 **Timestamp**: 2026-01-20 08:00:00 UTC
 
 #### Resources Cleaned
@@ -486,4 +497,3 @@ The action automatically generates a cleanup summary that appears in the GitHub 
 
 **Total Resources Cleaned**: 19
 ```
-

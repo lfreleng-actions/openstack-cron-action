@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 ##############################################################################
 # Smart image cleanup - Only removes unused images older than specified days
-# 
+#
 # This script:
 # 1. Fetches cloud-images.rst and scans JJB configs from the source repo
 # 2. Identifies images in active use
@@ -85,7 +85,7 @@ openstack --os-cloud "$os_cloud" image list \
     | while read -r name created_at _rest; do
         # Parse creation date (format: 2023-01-15T10:30:45Z)
         created_date=$(echo "$created_at" | cut -d'T' -f1)
-        
+
         # Compare dates
         if [[ "$created_date" < "$cutoff_date" ]]; then
             echo "$name"
@@ -118,12 +118,12 @@ while read -r image; do
     # Check if image is currently protected
     is_protected=$(openstack --os-cloud "$os_cloud" image show "$image" \
         -f value -c protected 2>/dev/null || echo "False")
-    
+
     if [[ "$is_protected" == "True" ]]; then
         if [[ "$DEBUG" == "true" ]]; then
             echo "INFO: Unsetting protected flag for: $image"
         fi
-        
+
         openstack --os-cloud "$os_cloud" image set --unprotected "$image"
         unprotected_images+=("$image")
         ((unprotected_count++)) || true

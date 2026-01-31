@@ -1,24 +1,39 @@
+<!--
+SPDX-License-Identifier: Apache-2.0
+SPDX-FileCopyrightText: 2025 The Linux Foundation
+-->
+
 # OpenStack Cron Action - Bug Fixes Summary
 
 ## Issues Fixed
 
 ### 1. ✅ Fixed clouds.yaml Template Syntax Error (action.yaml)
+
 **File**: `action.yaml` line 196
-**Problem**: Single-quoted heredoc (`<< 'EOF'`) prevented GitHub Actions variable expansion
-**Fix**: Changed to unquoted heredoc (`<< EOF`) to allow variable substitution
-**Impact**: clouds.yaml will now be generated correctly with actual credential values
+**Problem**: Single-quoted heredoc (`<< 'EOF'`) prevented GitHub Actions
+variable expansion
+**Fix**: Changed to unquoted heredoc (`<< EOF`) to allow variable
+substitution
+**Impact**: clouds.yaml will now be generated correctly with actual
+credential values
 
 ### 2. ✅ Fixed Stack Cleanup Command (scripts/cleanup-stacks.sh)
-**Problem**: Called non-existent command `lftools openstack stack cleanup --jenkins`
-**Fix**: Changed to correct command `lftools openstack stack delete-stale <jenkins_urls>`
-**Details**: 
+
+**Problem**: Called non-existent command
+`lftools openstack stack cleanup --jenkins`
+**Fix**: Changed to correct command
+`lftools openstack stack delete-stale <jenkins_urls>`
+**Details**:
+
 - Removed `--jenkins` flag (doesn't exist)
 - Jenkins URLs are now passed as positional arguments
 - Added shellcheck disable for intentional word splitting
 
 ### 3. ✅ Fixed Server Cleanup Implementation (scripts/cleanup-servers.sh)
+
 **Problem**: Called `lftools openstack server cleanup --jenkins` but --jenkins flag doesn't exist
 **Fix**: Implemented full cleanup logic from global-jjb:
+
 - Added `minion_in_jenkins()` function to check Jenkins API
 - Fetches server list with `openstack server list`
 - Checks each server against active Jenkins minions
@@ -26,8 +41,10 @@
 **Details**: The `server cleanup` command only accepts `--days` parameter, not `--jenkins`
 
 ### 4. ✅ Fixed Port Cleanup Implementation (scripts/cleanup-ports.sh)
+
 **Problem**: Called non-existent command `lftools openstack port cleanup --age`
 **Fix**: Implemented full cleanup logic from global-jjb:
+
 - Added port age checking with regex validation
 - Uses GNU parallel for concurrent processing
 - Implements proper cleanup function with error handling
@@ -35,6 +52,7 @@
 **Details**: No port-related commands exist in lftools
 
 ### 5. ✅ Cluster Cleanup Already Correct (scripts/cleanup-k8s-clusters.sh)
+
 **Status**: No changes needed
 **Details**: Already correctly implemented using native OpenStack CLI commands
 **Note**: `lftools openstack cluster` commands don't exist in upstream master

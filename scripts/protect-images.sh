@@ -66,7 +66,7 @@ failed_count=0
 for image in "${images[@]}"; do
     os_image_protected=$(openstack --os-cloud "$os_cloud" \
         image show "$image" -f value -c protected 2>/dev/null || echo "False")
-    
+
     if [[ "$DEBUG" == "true" ]]; then
         echo "Protected setting for $image: $os_image_protected"
     fi
