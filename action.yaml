@@ -271,6 +271,7 @@ runs:
 
     - name: Cleanup K8s Clusters
       if: ${{ inputs.cleanup_k8s_clusters == 'true' }}
+      id: cleanup-k8s
       shell: bash
       run: |
         echo "🧹 Cleaning up orphaned K8s clusters..."
@@ -279,6 +280,7 @@ runs:
 
     - name: Cleanup Stacks
       if: ${{ inputs.cleanup_stacks == 'true' }}
+      id: cleanup-stacks
       shell: bash
       run: |
         echo "🧹 Cleaning up orphaned stacks..."
@@ -286,6 +288,7 @@ runs:
 
     - name: Cleanup Servers
       if: ${{ inputs.cleanup_servers == 'true' }}
+      id: cleanup-servers
       shell: bash
       run: |
         echo "🧹 Cleaning up orphaned servers..."
@@ -293,6 +296,7 @@ runs:
 
     - name: Cleanup Ports
       if: ${{ inputs.cleanup_ports == 'true' }}
+      id: cleanup-ports
       shell: bash
       run: |
         echo "🧹 Cleaning up orphaned ports..."
@@ -300,6 +304,7 @@ runs:
 
     - name: Cleanup Volumes
       if: ${{ inputs.cleanup_volumes == 'true' }}
+      id: cleanup-volumes
       shell: bash
       run: |
         echo "🧹 Cleaning up orphaned volumes..."
@@ -362,34 +367,27 @@ runs:
         total=$((sum1 + sum2))
 
         # Generate summary for GitHub Actions UI
-        cat >> "$GITHUB_STEP_SUMMARY" << EOF
-        ### 🧹 OpenStack Cleanup Summary
-
-        **Cloud**: ${{ inputs.openstack_cloud }}
-        **Status**: ✅ Completed
-        **Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-
-        #### Resources Cleaned
-        - 🔄 K8s Clusters: **${k8s_count}** deleted
-        - 📚 Heat Stacks: **${stacks_count}** deleted
-        - 🖥️ Servers: **${servers_count}** deleted
-        - 🔌 Ports: **${ports_count}** deleted
-        - 💾 Volumes: **${volumes_count}** deleted
-        - 🛡️ Images Protected: **${protected_count}** images
-        - 🗑️ Old Images: **${images_count}** deleted
-        EOF
-
-        # Add smart cleanup info if it ran
-        if [[ "${{ inputs.cleanup_images_smart }}" == "true" ]]; then
-          cat >> "$GITHUB_STEP_SUMMARY" << EOF
-        - 🧠 Smart Cleanup: **${smart_unprotected}** images unprotected
-        EOF
-        fi
-
-        cat >> "$GITHUB_STEP_SUMMARY" << EOF
-
-        **Total Resources Cleaned**: **${total}**
-        EOF
+        {
+          echo "### 🧹 OpenStack Cleanup Summary"
+          echo ""
+          echo "**Cloud**: ${{ inputs.openstack_cloud }}"
+          echo "**Status**: ✅ Completed"
+          echo "**Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "#### Resources Cleaned"
+          echo "- 🔄 K8s Clusters: **${k8s_count}** deleted"
+          echo "- 📚 Heat Stacks: **${stacks_count}** deleted"
+          echo "- 🖥️ Servers: **${servers_count}** deleted"
+          echo "- 🔌 Ports: **${ports_count}** deleted"
+          echo "- 💾 Volumes: **${volumes_count}** deleted"
+          echo "- 🛡️ Images Protected: **${protected_count}** images"
+          echo "- 🗑️ Old Images: **${images_count}** deleted"
+          if [[ "${{ inputs.cleanup_images_smart }}" == "true" ]]; then
+            echo "- 🧠 Smart Cleanup: **${smart_unprotected}** images unprotected"
+          fi
+          echo ""
+          echo "**Total Resources Cleaned**: **${total}**"
+        } >> "$GITHUB_STEP_SUMMARY"
 
         # Set outputs
         echo "summary=Cleaned ${total} resources" >> "$GITHUB_OUTPUT"
