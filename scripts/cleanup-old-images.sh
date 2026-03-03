@@ -16,7 +16,12 @@ else
     set -eu -o pipefail
 fi
 
-# Note: lftools doesn't return count, using placeholder
-lftools openstack --os-cloud "${os_cloud}" image cleanup --days="${os_image_cleanup_age}"
-echo "deleted_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
-echo "✅ Old image cleanup complete"
+# Capture lftools output to count deleted images
+output=$(lftools openstack --os-cloud "${os_cloud}" image cleanup \
+    --days="${os_image_cleanup_age}" 2>&1) || true
+echo "$output"
+
+# Count lines matching 'Removed "..." from <cloud>.'
+deleted_count=$(echo "$output" | grep -c '^Removed "' || true)
+echo "deleted_count=${deleted_count}" >> "${GITHUB_OUTPUT:-/dev/null}"
+echo "✅ Old image cleanup complete (${deleted_count} images removed)"
