@@ -129,11 +129,11 @@ unprotected_images=()
 
 while read -r image; do
     # Check protected and visibility status in a single API call
-    read -r is_protected visibility < <(
-        openstack --os-cloud "$os_cloud" image show "$image" \
-            -f value -c protected -c visibility 2>/dev/null \
-        || echo "False unknown"
-    )
+    # Note: -f value outputs each column on a separate line
+    img_info=$(openstack --os-cloud "$os_cloud" image show "$image" \
+        -f value -c protected -c visibility 2>/dev/null || printf 'False\nunknown')
+    is_protected=$(echo "$img_info" | head -1)
+    visibility=$(echo "$img_info" | tail -1)
 
     needs_update=false
 
