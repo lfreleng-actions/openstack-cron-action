@@ -35,8 +35,8 @@ trap 'rm -rf "$tmpdir"' EXIT
 images_rst="$tmpdir/cloud-images.rst"
 [[ "$DEBUG" == "true" ]] && echo "INFO: Fetching cloud-images.rst from $repo_url"
 
-if curl -sf -o "$images_rst" "${repo_url}/raw/master/docs/cloud-images.rst" || \
-   curl -sf -o "$images_rst" "${repo_url}/raw/main/docs/cloud-images.rst"; then
+if curl -sfL -o "$images_rst" "${repo_url}/raw/master/docs/cloud-images.rst" || \
+   curl -sfL -o "$images_rst" "${repo_url}/raw/main/docs/cloud-images.rst"; then
     [[ "$DEBUG" == "true" ]] && echo "INFO: Found cloud-images.rst"
 else
     echo "⚠️  Could not fetch cloud-images.rst from repo, skipping smart cleanup"
@@ -45,7 +45,7 @@ else
 fi
 
 # Step 2: Extract image names from cloud-images.rst
-grep "^* ZZCI" "$images_rst" | sed 's/^* //' | sort -u > "$tmpdir/images-in-rst.txt"
+grep "^\* ZZCI" "$images_rst" | sed 's/^\* //' | sort -u > "$tmpdir/images-in-rst.txt" || true
 image_count_rst=$(wc -l < "$tmpdir/images-in-rst.txt")
 [[ "$DEBUG" == "true" ]] && echo "INFO: Found $image_count_rst images in cloud-images.rst"
 
@@ -79,14 +79,16 @@ cutoff_date=$(date -d "$age_days days ago" +%Y-%m-%d)
 [[ "$DEBUG" == "true" ]] && echo "INFO: Looking for images older than $cutoff_date (${age_days} days)"
 
 # Get all ZZCI images with creation dates
+# Note: image names contain spaces, so extract date (last field) carefully
 openstack --os-cloud "$os_cloud" image list \
     --long -f value -c Name -c CreatedAt \
     | grep "^ZZCI" \
-    | while read -r name created_at _rest; do
-        # Parse creation date (format: 2023-01-15T10:30:45Z)
+    | while IFS= read -r line; do
+        # Last field is the date, everything before is the name
+        created_at="${line##* }"
+        name="${line% *}"
         created_date=$(echo "$created_at" | cut -d'T' -f1)
 
-        # Compare dates
         if [[ "$created_date" < "$cutoff_date" ]]; then
             echo "$name"
         fi
