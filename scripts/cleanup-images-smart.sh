@@ -44,10 +44,13 @@ else
     exit 0
 fi
 
-# Step 2: Extract image names from cloud-images.rst
-grep "^\* ZZCI" "$images_rst" | sed 's/^\* //' | sort -u > "$tmpdir/images-in-rst.txt" || true
+# Step 2: Extract ONLY current/recommended image names from cloud-images.rst
+# Note: cloud-images.rst contains historical inventory of ALL images ever built.
+# Only entries BEFORE "Historical inventory:" are current/in-use references.
+sed -n '1,/Historical inventory/p' "$images_rst" \
+    | grep "^\* ZZCI" | sed 's/^\* //' | sort -u > "$tmpdir/images-in-rst.txt" || true
 image_count_rst=$(wc -l < "$tmpdir/images-in-rst.txt")
-[[ "$DEBUG" == "true" ]] && echo "INFO: Found $image_count_rst images in cloud-images.rst"
+[[ "$DEBUG" == "true" ]] && echo "INFO: Found $image_count_rst current images in cloud-images.rst"
 
 # Step 3: Scan JJB configs for additional image references
 [[ "$DEBUG" == "true" ]] && echo "INFO: Scanning JJB configs for image references"
