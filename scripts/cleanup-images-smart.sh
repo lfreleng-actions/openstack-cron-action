@@ -128,20 +128,32 @@ unprotected_count=0
 unprotected_images=()
 
 while read -r image; do
-    # Check if image is currently protected
-    is_protected=$(openstack --os-cloud "$os_cloud" image show "$image" \
-        -f value -c protected 2>/dev/null || echo "False")
+    # Check protected and visibility status in a single API call
+    read -r is_protected visibility < <(
+        openstack --os-cloud "$os_cloud" image show "$image" \
+            -f value -c protected -c visibility 2>/dev/null \
+        || echo "False unknown"
+    )
+
+    needs_update=false
 
     if [[ "$is_protected" == "True" ]]; then
-        if [[ "$DEBUG" == "true" ]]; then
-            echo "INFO: Unsetting protected flag for: $image"
-        fi
-
+        [[ "$DEBUG" == "true" ]] && echo "INFO: Unsetting protected flag for: $image"
         openstack --os-cloud "$os_cloud" image set --unprotected "$image"
+        needs_update=true
+    fi
+
+    if [[ "$visibility" == "shared" ]]; then
+        [[ "$DEBUG" == "true" ]] && echo "INFO: Setting visibility to private for: $image"
+        openstack --os-cloud "$os_cloud" image set --private "$image"
+        needs_update=true
+    fi
+
+    if [[ "$needs_update" == "true" ]]; then
         unprotected_images+=("$image")
         ((unprotected_count++)) || true
     else
-        [[ "$DEBUG" == "true" ]] && echo "INFO: Image already unprotected: $image"
+        [[ "$DEBUG" == "true" ]] && echo "INFO: Image already unprotected and private: $image"
     fi
 done < "$tmpdir/images-to-unprotect.txt"
 
