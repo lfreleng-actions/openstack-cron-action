@@ -78,30 +78,25 @@ total_in_use=$(wc -l < "$tmpdir/images-in-use.txt")
 cutoff_date=$(date -d "$age_days days ago" +%Y-%m-%d)
 [[ "$DEBUG" == "true" ]] && echo "INFO: Looking for images older than $cutoff_date (${age_days} days)"
 
-# Get all ZZCI images with creation dates using JSON to avoid column name issues
+# Get all ZZCI images and extract date from image name
+# Format: "ZZCI - <platform> - <type> - <arch> - YYYYMMDD-HHMMSS.mmm"
+# Note: openstack image list --long does not include 'Created At' in JSON output
 openstack --os-cloud "$os_cloud" image list \
     --long -f json \
     | python3 -c "
-import json, sys
+import json, sys, re
 data = json.load(sys.stdin)
-if data and '$DEBUG' == 'true':
-    print('DEBUG: JSON keys: ' + str(list(data[0].keys())), file=sys.stderr)
 for img in data:
     name = img.get('Name', '')
     if name.startswith('ZZCI'):
-        # Try multiple possible column names for created date
-        created = ''
-        for key in ['Created At', 'created_at', 'CreatedAt', 'created']:
-            if key in img and img[key]:
-                created = img[key]
-                break
-        if created:
-            print(f'{name}\t{created}')
+        # Extract date from image name (YYYYMMDD pattern near end)
+        match = re.search(r'(\d{4})(\d{2})(\d{2})-\d{6}', name)
+        if match:
+            date_str = f'{match.group(1)}-{match.group(2)}-{match.group(3)}'
+            print(f'{name}\t{date_str}')
         elif '$DEBUG' == 'true':
-            print(f'DEBUG: No created date for {name}, keys={list(img.keys())}', file=sys.stderr)
-" | while IFS=$'\t' read -r name created_at; do
-        created_date=$(echo "$created_at" | cut -d'T' -f1)
-
+            print(f'DEBUG: Cannot extract date from: {name}', file=sys.stderr)
+" | while IFS=$'\t' read -r name created_date; do
         if [[ "$created_date" < "$cutoff_date" ]]; then
             echo "$name"
         fi
