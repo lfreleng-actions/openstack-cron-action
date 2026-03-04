@@ -84,13 +84,21 @@ openstack --os-cloud "$os_cloud" image list \
     | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
+if data and '$DEBUG' == 'true':
+    print('DEBUG: JSON keys: ' + str(list(data[0].keys())), file=sys.stderr)
 for img in data:
     name = img.get('Name', '')
     if name.startswith('ZZCI'):
         # Try multiple possible column names for created date
-        created = img.get('Created At', img.get('created_at', img.get('CreatedAt', '')))
+        created = ''
+        for key in ['Created At', 'created_at', 'CreatedAt', 'created']:
+            if key in img and img[key]:
+                created = img[key]
+                break
         if created:
             print(f'{name}\t{created}')
+        elif '$DEBUG' == 'true':
+            print(f'DEBUG: No created date for {name}, keys={list(img.keys())}', file=sys.stderr)
 " | while IFS=$'\t' read -r name created_at; do
         created_date=$(echo "$created_at" | cut -d'T' -f1)
 
