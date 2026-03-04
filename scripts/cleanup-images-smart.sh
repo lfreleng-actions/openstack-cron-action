@@ -78,15 +78,20 @@ total_in_use=$(wc -l < "$tmpdir/images-in-use.txt")
 cutoff_date=$(date -d "$age_days days ago" +%Y-%m-%d)
 [[ "$DEBUG" == "true" ]] && echo "INFO: Looking for images older than $cutoff_date (${age_days} days)"
 
-# Get all ZZCI images with creation dates
-# Note: image names contain spaces, so extract date (last field) carefully
+# Get all ZZCI images with creation dates using JSON to avoid column name issues
 openstack --os-cloud "$os_cloud" image list \
-    --long -f value -c Name -c CreatedAt \
-    | grep "^ZZCI" \
-    | while IFS= read -r line; do
-        # Last field is the date, everything before is the name
-        created_at="${line##* }"
-        name="${line% *}"
+    --long -f json \
+    | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for img in data:
+    name = img.get('Name', '')
+    if name.startswith('ZZCI'):
+        # Try multiple possible column names for created date
+        created = img.get('Created At', img.get('created_at', img.get('CreatedAt', '')))
+        if created:
+            print(f'{name}\t{created}')
+" | while IFS=$'\t' read -r name created_at; do
         created_date=$(echo "$created_at" | cut -d'T' -f1)
 
         if [[ "$created_date" < "$cutoff_date" ]]; then
