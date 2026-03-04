@@ -123,42 +123,52 @@ fi
 
 [[ "$DEBUG" == "true" ]] && echo "INFO: Found $to_unprotect_count images to unprotect"
 
-# Step 6: Unset protected flag on identified images
+# Step 6: Unprotect, set private, and delete old unused images
 unprotected_count=0
+deleted_count=0
 unprotected_images=()
+deleted_images=()
 
 while read -r image; do
     # Check protected and visibility status in a single API call
     # Note: -f value outputs each column on a separate line
     img_info=$(openstack --os-cloud "$os_cloud" image show "$image" \
-        -f value -c protected -c visibility 2>/dev/null || printf 'False\nunknown')
-    is_protected=$(echo "$img_info" | head -1)
-    visibility=$(echo "$img_info" | tail -1)
+        -f value -c protected -c visibility -c status 2>/dev/null || printf 'False\nunknown\nunknown')
+    is_protected=$(echo "$img_info" | sed -n '1p')
+    visibility=$(echo "$img_info" | sed -n '2p')
+    status=$(echo "$img_info" | sed -n '3p')
 
-    needs_update=false
+    # Skip images already in deleted state
+    if [[ "$status" == "deleted" ]]; then
+        [[ "$DEBUG" == "true" ]] && echo "INFO: Skipping already deleted image: $image"
+        continue
+    fi
 
     if [[ "$is_protected" == "True" ]]; then
         [[ "$DEBUG" == "true" ]] && echo "INFO: Unsetting protected flag for: $image"
         openstack --os-cloud "$os_cloud" image set --unprotected "$image"
-        needs_update=true
     fi
 
     if [[ "$visibility" == "shared" ]]; then
         [[ "$DEBUG" == "true" ]] && echo "INFO: Setting visibility to private for: $image"
         openstack --os-cloud "$os_cloud" image set --private "$image"
-        needs_update=true
     fi
 
-    if [[ "$needs_update" == "true" ]]; then
-        unprotected_images+=("$image")
-        ((unprotected_count++)) || true
+    unprotected_images+=("$image")
+    ((unprotected_count++)) || true
+
+    # Delete the image directly (avoids lftools crash on ghost entries)
+    if openstack --os-cloud "$os_cloud" image delete "$image" 2>/dev/null; then
+        [[ "$DEBUG" == "true" ]] && echo "INFO: Deleted image: $image"
+        deleted_images+=("$image")
+        ((deleted_count++)) || true
     else
-        [[ "$DEBUG" == "true" ]] && echo "INFO: Image already unprotected and private: $image"
+        [[ "$DEBUG" == "true" ]] && echo "WARN: Failed to delete image: $image"
     fi
 done < "$tmpdir/images-to-unprotect.txt"
 
 # Output for GitHub Actions
-echo "unprotected_count=$unprotected_count" >> "${GITHUB_OUTPUT:-/dev/null}"
+echo "unprotected_count=$deleted_count" >> "${GITHUB_OUTPUT:-/dev/null}"
 
 # Generate detailed summary
 {
@@ -176,22 +186,21 @@ echo "unprotected_count=$unprotected_count" >> "${GITHUB_OUTPUT:-/dev/null}"
     echo "- 🗑️ Unused old images identified: **$to_unprotect_count**"
     echo ""
     echo "#### Action Taken"
-    if [[ $unprotected_count -gt 0 ]]; then
-        echo "✅ **Unprotected $unprotected_count image(s)** (protection flag removed)"
+    if [[ $deleted_count -gt 0 ]]; then
+        echo "✅ **Deleted $deleted_count image(s)** (unprotected → private → deleted)"
         echo ""
-        echo "These images will be deleted on the next regular cleanup run:"
-        for img in "${unprotected_images[@]}"; do
+        echo "Deleted images:"
+        for img in "${deleted_images[@]}"; do
             echo "- \`$img\`"
         done
     else
-        echo "✅ No images needed unprotection"
+        echo "✅ No images needed cleanup"
     fi
 } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 
 # Summary output (always shown)
-if [[ $unprotected_count -gt 0 ]]; then
-    echo "✅ Unprotected $unprotected_count unused image(s) older than $age_days days"
-    [[ "$DEBUG" == "false" ]] && echo "   Images will be deleted on next regular cleanup run"
+if [[ $deleted_count -gt 0 ]]; then
+    echo "✅ Deleted $deleted_count unused image(s) older than $age_days days"
 else
     echo "✅ No unused old images found"
 fi
