@@ -52,21 +52,35 @@ sed -n '1,/Historical inventory/p' "$images_rst" \
 image_count_rst=$(wc -l < "$tmpdir/images-in-rst.txt")
 [[ "$DEBUG" == "true" ]] && echo "INFO: Found $image_count_rst current images in cloud-images.rst"
 
-# Step 3: Scan JJB configs for additional image references
-[[ "$DEBUG" == "true" ]] && echo "INFO: Scanning JJB configs for image references"
+# Step 3: Scan JJB and Jenkins cloud configs for image references
+[[ "$DEBUG" == "true" ]] && echo "INFO: Scanning JJB and Jenkins cloud configs for image references"
 
-# Clone repo to scan JJB configs (shallow clone for speed)
+# Clone repo to scan configs (shallow clone for speed)
 if git clone --depth 1 --single-branch "$repo_url" "$tmpdir/repo" &>/dev/null; then
-    # Search for image names in JJB YAML files
+    touch "$tmpdir/images-in-jjb.txt"
+
+    # 3a. Search JJB YAML files for image references
+    # Patterns: *_system_image, *-image, cloud-image, image
     {
         find "$tmpdir/repo/jjb" -name "*.yaml" -o -name "*.yml" 2>/dev/null | while read -r file; do
-            # Look for image references (various patterns)
-            grep -oP '(image|builder-image|base-image|cloud-image):\s*["\x27]?ZZCI[^"\x27]*' "$file" 2>/dev/null || true
+            grep -oP '\b\w*image\w*:\s*["\x27]?ZZCI[^"\x27\n]*' "$file" 2>/dev/null || true
         done
-    } | sed 's/.*ZZCI/ZZCI/' | sed "s/[\"' ]//g" | sort -u >> "$tmpdir/images-in-jjb.txt"
+    } | sed 's/.*ZZCI/ZZCI/' | sed "s/[\"' ]*$//" | sort -u >> "$tmpdir/images-in-jjb.txt"
 
+    # 3b. Scan Jenkins cloud config files for IMAGE_NAME= references
+    if [[ -d "$tmpdir/repo/jenkins-config" ]]; then
+        grep -rh 'IMAGE_NAME=' "$tmpdir/repo/jenkins-config/" 2>/dev/null \
+            | sed 's/^IMAGE_NAME=//' \
+            | sed 's/[[:space:]]*$//' \
+            | grep "^ZZCI" \
+            | sort -u >> "$tmpdir/images-in-jjb.txt"
+        [[ "$DEBUG" == "true" ]] && echo "INFO: Scanned jenkins-config/ for IMAGE_NAME references"
+    fi
+
+    # Deduplicate
+    sort -u -o "$tmpdir/images-in-jjb.txt" "$tmpdir/images-in-jjb.txt"
     image_count_jjb=$(wc -l < "$tmpdir/images-in-jjb.txt" 2>/dev/null || echo 0)
-    [[ "$DEBUG" == "true" ]] && echo "INFO: Found $image_count_jjb additional images in JJB configs"
+    [[ "$DEBUG" == "true" ]] && echo "INFO: Found $image_count_jjb additional images in JJB/Jenkins configs"
 else
     [[ "$DEBUG" == "true" ]] && echo "WARN: Could not clone repo, using only cloud-images.rst"
     touch "$tmpdir/images-in-jjb.txt"
@@ -180,7 +194,7 @@ echo "unprotected_count=$deleted_count" >> "${GITHUB_OUTPUT:-/dev/null}"
     echo ""
     echo "#### Analysis Results"
     echo "- 📋 Images in \`cloud-images.rst\`: **$image_count_rst**"
-    echo "- 📋 Images in JJB configs: **$image_count_jjb**"
+    echo "- 📋 Images in JJB/Jenkins configs: **$image_count_jjb**"
     echo "- 🛡️ Total images in use: **$total_in_use**"
     echo "- 🕐 Old images (>${age_days} days): **$old_count**"
     echo "- 🗑️ Unused old images identified: **$to_unprotect_count**"
