@@ -9,6 +9,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    paths:
+      - '**'
+      - '!.github/**'
+      - '!.*'
+      - '!tox.ini'
   workflow_dispatch:
 
 jobs:
