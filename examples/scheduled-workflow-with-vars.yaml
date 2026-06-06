@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Run OpenStack cleanup
-        uses: askb/openstack-cron-action@main
+        uses: lfreleng-actions/openstack-cron-action@main
         with:
           # Use repository variables for project-specific configuration
           openstack_cloud: >

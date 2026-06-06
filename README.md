@@ -7,7 +7,7 @@ SPDX-FileCopyrightText: 2025 The Linux Foundation
 
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable-next-line MD013 -->
-[![Linux Foundation](https://img.shields.io/badge/Linux-Foundation-blue)](https://linuxfoundation.org/) [![Source Code](https://img.shields.io/badge/GitHub-100000?logo=github&logoColor=white&color=blue)](https://github.com/askb/openstack-cron-action) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![pre-commit.ci status badge]][pre-commit.ci results page] [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/askb/openstack-cron-action/badge)](https://scorecard.dev/viewer/?uri=github.com/askb/openstack-cron-action)
+[![Linux Foundation](https://img.shields.io/badge/Linux-Foundation-blue)](https://linuxfoundation.org/) [![Source Code](https://img.shields.io/badge/GitHub-100000?logo=github&logoColor=white&color=blue)](https://github.com/lfreleng-actions/openstack-cron-action) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![pre-commit.ci status badge]][pre-commit.ci results page] [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/lfreleng-actions/openstack-cron-action/badge)](https://scorecard.dev/viewer/?uri=github.com/lfreleng-actions/openstack-cron-action)
 <!-- prettier-ignore-end -->
 
 Automated cleanup of orphaned OpenStack cloud resources via GitHub Actions.
@@ -29,7 +29,7 @@ This action performs scheduled cleanup of orphaned resources in OpenStack clouds
 ### Basic Usage
 
 ```yaml
-- uses: askb/openstack-cron-action@main
+- uses: lfreleng-actions/openstack-cron-action@main
   with:
     openstack_cloud: 'vex'
     clouds_yaml: ${{ secrets.OPENSTACK_CLOUDS_YAML }}
@@ -39,7 +39,7 @@ This action performs scheduled cleanup of orphaned resources in OpenStack clouds
 ### Using Repository Variables (Recommended)
 
 ```yaml
-- uses: askb/openstack-cron-action@main
+- uses: lfreleng-actions/openstack-cron-action@main
   with:
     openstack_cloud: ${{ vars.OPENSTACK_CLOUD || 'vex' }}
     clouds_yaml: ${{ secrets.OPENSTACK_CLOUDS_YAML }}
@@ -50,7 +50,7 @@ This action performs scheduled cleanup of orphaned resources in OpenStack clouds
 ### Full Configuration
 
 ```yaml
-- uses: askb/openstack-cron-action@main
+- uses: lfreleng-actions/openstack-cron-action@main
   with:
     # Required
     openstack_cloud: 'vex'
@@ -161,7 +161,7 @@ jobs:
 
     steps:
       - name: Run OpenStack cleanup
-        uses: askb/openstack-cron-action@main
+        uses: lfreleng-actions/openstack-cron-action@main
         with:
           openstack_cloud: ${{ inputs.openstack_cloud || vars.OPENSTACK_CLOUD || 'vex' }}
           clouds_yaml: ${{ secrets.OPENSTACK_CLOUDS_YAML }}
@@ -215,7 +215,7 @@ jobs:
 
     steps:
       - name: Run OpenStack cleanup
-        uses: askb/openstack-cron-action@main
+        uses: lfreleng-actions/openstack-cron-action@main
         with:
           openstack_cloud: 'vex'
           clouds_yaml: ${{ secrets.OPENSTACK_CLOUDS_YAML }}
@@ -471,7 +471,7 @@ The workflow includes an email notification step that sends emails on failure us
 By default, the action runs in quiet mode with minimal output. To enable verbose debug logging:
 
 ```yaml
-- uses: askb/openstack-cron-action@main
+- uses: lfreleng-actions/openstack-cron-action@main
   with:
     enable_debug: true  # Enable verbose debug logging
     # ... other inputs
@@ -505,5 +505,5 @@ GitHub Actions UI:
 **Total Resources Cleaned**: 19
 ```
 
-[pre-commit.ci results page]: https://results.pre-commit.ci/latest/github/askb/openstack-cron-action/main
-[pre-commit.ci status badge]: https://results.pre-commit.ci/badge/github/askb/openstack-cron-action/main.svg
+[pre-commit.ci results page]: https://results.pre-commit.ci/latest/github/lfreleng-actions/openstack-cron-action/main
+[pre-commit.ci status badge]: https://results.pre-commit.ci/badge/github/lfreleng-actions/openstack-cron-action/main.svg
