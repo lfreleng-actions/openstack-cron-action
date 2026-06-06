@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Linux Foundation
+#
+# Pin for the zizmor static analyser used by .github/workflows/zizmor.yaml.
+#
+# This file exists solely so Dependabot can keep the zizmor version
+# current via its pip ecosystem (see .github/dependabot.yml). The
+# workflow reads the pin from this file at run-time with grep; it is
+# never installed by pip itself.
+#
+# Edit format: a single line of `zizmor==<version>`. Do not add other
+# packages here.
+zizmor==1.24.1

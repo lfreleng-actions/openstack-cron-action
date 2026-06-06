@@ -4,7 +4,6 @@
 
 name: '☁️ OpenStack Cron Cleanup'
 description: 'Automated cleanup of orphaned OpenStack cloud resources'
-author: 'The Linux Foundation'
 
 branding:
   icon: 'cloud-off'

@@ -7,3 +7,6 @@ MD013: false
 
 # Allow duplicate headings (needed for sections like "Jenkins Integration")
 MD024: false
+
+# Allow non-aligned table pipes (tables hand-authored for readability)
+MD060: false

@@ -1,13 +1,20 @@
+<!--
+SPDX-License-Identifier: Apache-2.0
+SPDX-FileCopyrightText: 2025 The Linux Foundation
+-->
+
 # ☁️ OpenStack Cron Cleanup Action
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- SPDX-FileCopyrightText: 2025 The Linux Foundation -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable-next-line MD013 -->
+[![Linux Foundation](https://img.shields.io/badge/Linux-Foundation-blue)](https://linuxfoundation.org/) [![Source Code](https://img.shields.io/badge/GitHub-100000?logo=github&logoColor=white&color=blue)](https://github.com/askb/openstack-cron-action) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![pre-commit.ci status badge]][pre-commit.ci results page] [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/askb/openstack-cron-action/badge)](https://scorecard.dev/viewer/?uri=github.com/askb/openstack-cron-action)
+<!-- prettier-ignore-end -->
 
 Automated cleanup of orphaned OpenStack cloud resources via GitHub Actions.
 
 ## Overview
 
-This action performs hourly cleanup of orphaned resources in OpenStack clouds:
+This action performs scheduled cleanup of orphaned resources in OpenStack clouds:
 
 - 🗑️ Kubernetes clusters
 - 🗑️ Heat stacks
@@ -299,12 +306,12 @@ jobs:
 
 ## Jenkins Integration
 
-When `jenkins_urls` is provided, the action will:
+When you set `jenkins_urls`, the action will:
 
 1. Check each Jenkins URL for active builds
 2. Identify resources in use by active builds
 3. Skip cleanup of resources in active use
-4. Only clean up truly orphaned resources
+4. Clean up truly orphaned resources
 
 This prevents accidental deletion of resources needed by running jobs.
 
@@ -312,7 +319,7 @@ This prevents accidental deletion of resources needed by running jobs.
 
 ### Use Repository Variables
 
-For project-agnostic deployments that can be shared across multiple projects:
+For project-agnostic deployments reused across projects:
 
 **DO** ✅:
 
@@ -358,7 +365,7 @@ gh variable set FAILURE_NOTIFICATION_EMAIL \
 
 **Standalone Scheduled Job** (This action):
 
-- Uses `schedule` trigger for automatic hourly runs
+- Uses a `schedule` trigger for automatic recurring runs
 - Uses `workflow_dispatch` for manual testing
 - Does NOT use `workflow_call` (not called by other workflows)
 - Independent from Gerrit integration
@@ -389,7 +396,7 @@ on:
 
 **Solution**:
 
-- Check that cleanup flags are set to `true`
+- Check that cleanup flags use `true`
 - Verify resources meet age requirements
 - Check Jenkins integration isn't protecting resources
 
@@ -455,7 +462,7 @@ The workflow includes an email notification step that sends emails on failure us
 
 **Default Behavior**:
 
-- Notifications sent **only on failure**
+- Notifications fire **on failure**
 - No emails sent on success
 - Matches Jenkins `global-jjb-email-notification` behavior
 
@@ -471,7 +478,7 @@ By default, the action runs in quiet mode with minimal output. To enable verbose
 ```
 
 **Debug mode output**: Shows detailed information about each operation
-**Quiet mode output** (default): Shows only summaries (e.g.,
+**Quiet mode output** (default): Shows summaries alone (e.g.,
 "✅ Deleted 3 servers: prd-123, snd-456, bastion-gh-789")
 
 ## Cleanup Summary
@@ -497,3 +504,6 @@ GitHub Actions UI:
 
 **Total Resources Cleaned**: 19
 ```
+
+[pre-commit.ci results page]: https://results.pre-commit.ci/latest/github/askb/openstack-cron-action/main
+[pre-commit.ci status badge]: https://results.pre-commit.ci/badge/github/askb/openstack-cron-action/main.svg
