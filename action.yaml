@@ -159,15 +159,19 @@ runs:
   steps:
     - name: Validate inputs
       shell: bash
+      env:
+        INPUT_OPENSTACK_CLOUD: ${{ inputs.openstack_cloud }}
+        INPUT_CLOUDS_YAML: ${{ inputs.clouds_yaml }}
+        INPUT_OPENSTACK_AUTH_URL: ${{ inputs.openstack_auth_url }}
       run: |
-        if [[ -z "${{ inputs.openstack_cloud }}" ]]; then
+        if [[ -z "$INPUT_OPENSTACK_CLOUD" ]]; then
           echo "❌ Error: openstack_cloud is required"
           exit 1
         fi
 
         # Validate that either clouds_yaml OR credentials are provided
-        if [[ -z "${{ inputs.clouds_yaml }}" ]] && \
-           [[ -z "${{ inputs.openstack_auth_url }}" ]]; then
+        if [[ -z "$INPUT_CLOUDS_YAML" ]] && \
+           [[ -z "$INPUT_OPENSTACK_AUTH_URL" ]]; then
           echo "❌ Error: Either clouds_yaml or OpenStack credentials required"
           echo "   Provide clouds_yaml OR" \
             "(auth_url + username + password + project_id)"
@@ -200,32 +204,50 @@ runs:
 
     - name: Configure OpenStack credentials
       shell: bash
+      env:
+        INPUT_CLOUDS_YAML: ${{ inputs.clouds_yaml }}
+        INPUT_OPENSTACK_AUTH_URL: ${{ inputs.openstack_auth_url }}
+        INPUT_OPENSTACK_CLOUD: ${{ inputs.openstack_cloud }}
+        INPUT_OPENSTACK_USERNAME: ${{ inputs.openstack_username }}
+        INPUT_OPENSTACK_PASSWORD: ${{ inputs.openstack_password }}
+        INPUT_OPENSTACK_PROJECT_ID: ${{ inputs.openstack_project_id }}
+        INPUT_OPENSTACK_DOMAIN_NAME: ${{ inputs.openstack_domain_name }}
+        INPUT_OPENSTACK_REGION: ${{ inputs.openstack_region }}
       run: |
         echo "🔐 Configuring OpenStack credentials..."
         mkdir -p "$HOME/.config/openstack"
+        # Restrict permissions for the whole creation window so clouds.yaml is
+        # never world/group-readable, even momentarily before chmod runs.
+        umask 077
 
         # Create clouds.yaml from base64 input or generate from credentials
-        if [[ -n "${{ inputs.clouds_yaml }}" ]]; then
-          echo "${{ inputs.clouds_yaml }}" | base64 -d > \
+        if [[ -n "$INPUT_CLOUDS_YAML" ]]; then
+          printf '%s' "$INPUT_CLOUDS_YAML" | base64 -d > \
             "$HOME/.config/openstack/clouds.yaml"
+          chmod 600 "$HOME/.config/openstack/clouds.yaml"
           echo "✅ Using provided clouds.yaml"
-        elif [[ -n "${{ inputs.openstack_auth_url }}" ]]; then
+        elif [[ -n "$INPUT_OPENSTACK_AUTH_URL" ]]; then
           # Auto-generate clouds.yaml from individual credentials
-          # Assign to shell variables to avoid any issues with GitHub
-          # Actions variable expansion
-          cloud_name="${{ inputs.openstack_cloud }}"
-          auth_url="${{ inputs.openstack_auth_url }}"
-          username="${{ inputs.openstack_username }}"
+          cloud_name="$INPUT_OPENSTACK_CLOUD"
+          auth_url="$INPUT_OPENSTACK_AUTH_URL"
+          username="$INPUT_OPENSTACK_USERNAME"
 
           # Decode password if base64 encoded (silent for security)
-          password="${{ inputs.openstack_password }}"
+          password="$INPUT_OPENSTACK_PASSWORD"
           if printf '%s' "$password" | base64 -d &> /dev/null; then
             password=$(printf '%s' "$password" | base64 -d)
           fi
+          # Mask the decoded password to prevent log exposure. Mask line by
+          # line: this both masks the real value and prevents a newline in the
+          # value from injecting an additional workflow command into the log
+          # command stream.
+          while IFS= read -r mask_line; do
+            [ -n "$mask_line" ] && echo "::add-mask::${mask_line}"
+          done <<< "$password"
 
-          project_id="${{ inputs.openstack_project_id }}"
-          domain_name="${{ inputs.openstack_domain_name }}"
-          region="${{ inputs.openstack_region }}"
+          project_id="$INPUT_OPENSTACK_PROJECT_ID"
+          domain_name="$INPUT_OPENSTACK_DOMAIN_NAME"
+          region="$INPUT_OPENSTACK_REGION"
 
           cat > "$HOME/.config/openstack/clouds.yaml" << EOF
         clouds:
@@ -239,12 +261,15 @@ runs:
               project_domain_name: ${domain_name}
             region_name: ${region}
         EOF
+          chmod 600 "$HOME/.config/openstack/clouds.yaml"
           echo "✅ Generated clouds.yaml from credentials"
         fi
 
-        # Verify clouds.yaml
-        cloud="${{ inputs.openstack_cloud }}"
-        if ! grep -q "$cloud" \
+        # Verify clouds.yaml. Use fixed-string matching (-F) and '--' so the
+        # cloud name is never interpreted as a regex or as an option, even if
+        # it contains metacharacters or begins with '-'.
+        cloud="$INPUT_OPENSTACK_CLOUD"
+        if ! grep -qF -- "$cloud" \
           "$HOME/.config/openstack/clouds.yaml"; then
           echo "❌ Error: Cloud '$cloud' not found in clouds.yaml"
           exit 1
@@ -254,12 +279,18 @@ runs:
 
     - name: Setup environment variables
       shell: bash
+      env:
+        INPUT_OPENSTACK_CLOUD: ${{ inputs.openstack_cloud }}
+        INPUT_JENKINS_URLS: ${{ inputs.jenkins_urls }}
+        INPUT_IMAGE_CLEANUP_AGE: ${{ inputs.image_cleanup_age }}
+        INPUT_ENABLE_DEBUG: ${{ inputs.enable_debug }}
       run: |
-        echo "OS_CLOUD=${{ inputs.openstack_cloud }}" >> "$GITHUB_ENV"
-        echo "JENKINS_URLS=${{ inputs.jenkins_urls }}" >> "$GITHUB_ENV"
-        age="${{ inputs.image_cleanup_age }}"
-        echo "OS_IMAGE_CLEANUP_AGE=$age" >> "$GITHUB_ENV"
-        echo "DEBUG=${{ inputs.enable_debug }}" >> "$GITHUB_ENV"
+        # Sanitize inputs before writing to GITHUB_ENV (strip CR and LF to
+        # prevent env-file injection and CRLF inconsistencies across runners)
+        printf 'OS_CLOUD=%s\n' "$(printf '%s' "$INPUT_OPENSTACK_CLOUD" | tr -d '\r\n')" >> "$GITHUB_ENV"
+        printf 'JENKINS_URLS=%s\n' "$(printf '%s' "$INPUT_JENKINS_URLS" | tr -d '\r\n')" >> "$GITHUB_ENV"
+        printf 'OS_IMAGE_CLEANUP_AGE=%s\n' "$(printf '%s' "$INPUT_IMAGE_CLEANUP_AGE" | tr -d '\r\n')" >> "$GITHUB_ENV"
+        printf 'DEBUG=%s\n' "$(printf '%s' "$INPUT_ENABLE_DEBUG" | tr -d '\r\n')" >> "$GITHUB_ENV"
 
         # Auto-detect repo URL from GitHub context
         if [[ -n "${{ github.repository }}" ]]; then
@@ -337,29 +368,27 @@ runs:
       if: always()
       id: summary
       shell: bash
+      env:
+        INPUT_OPENSTACK_CLOUD: ${{ inputs.openstack_cloud }}
+        INPUT_CLEANUP_IMAGES_SMART: ${{ inputs.cleanup_images_smart }}
+        STEP_K8S_COUNT: ${{ steps.cleanup-k8s.outputs.deleted_count || '0' }}
+        STEP_STACKS_COUNT: ${{ steps.cleanup-stacks.outputs.deleted_count || '0' }}
+        STEP_SERVERS_COUNT: ${{ steps.cleanup-servers.outputs.deleted_count || '0' }}
+        STEP_PORTS_COUNT: ${{ steps.cleanup-ports.outputs.deleted_count || '0' }}
+        STEP_VOLUMES_COUNT: ${{ steps.cleanup-volumes.outputs.deleted_count || '0' }}
+        STEP_PROTECTED_COUNT: ${{ steps.protect-images.outputs.protected_count || '0' }}
+        STEP_IMAGES_COUNT: ${{ steps.cleanup-images.outputs.deleted_count || '0' }}
+        STEP_SMART_UNPROTECTED: ${{ steps.cleanup-images-smart.outputs.unprotected_count || '0' }}
       run: |
         # Collect outputs from all steps
-        k8s_count="${{ steps.cleanup-k8s.outputs.deleted_count || '0' }}"
-        stacks_count="${{ steps.cleanup-stacks.outputs.deleted_count || '0' }}"
-        servers_count="$(
-          echo '${{ steps.cleanup-servers.outputs.deleted_count || '0' }}'
-        )"
-        ports_count="$(
-          echo '${{ steps.cleanup-ports.outputs.deleted_count || '0' }}'
-        )"
-        volumes_count="$(
-          echo '${{ steps.cleanup-volumes.outputs.deleted_count || '0' }}'
-        )"
-        protected_count="$(
-          echo '${{ steps.protect-images.outputs.protected_count || '0' }}'
-        )"
-        images_count="$(
-          echo '${{ steps.cleanup-images.outputs.deleted_count || '0' }}'
-        )"
-        smart_unprotected="$(
-          val='${{ steps.cleanup-images-smart.outputs.unprotected_count }}'
-          echo "${val:-0}"
-        )"
+        k8s_count="${STEP_K8S_COUNT:-0}"
+        stacks_count="${STEP_STACKS_COUNT:-0}"
+        servers_count="${STEP_SERVERS_COUNT:-0}"
+        ports_count="${STEP_PORTS_COUNT:-0}"
+        volumes_count="${STEP_VOLUMES_COUNT:-0}"
+        protected_count="${STEP_PROTECTED_COUNT:-0}"
+        images_count="${STEP_IMAGES_COUNT:-0}"
+        smart_unprotected="${STEP_SMART_UNPROTECTED:-0}"
 
         sum1=$((k8s_count + stacks_count + servers_count))
         sum2=$((ports_count + volumes_count + images_count))
@@ -369,7 +398,7 @@ runs:
         {
           echo "### 🧹 OpenStack Cleanup Summary"
           echo ""
-          echo "**Cloud**: ${{ inputs.openstack_cloud }}"
+          echo "**Cloud**: $INPUT_OPENSTACK_CLOUD"
           echo "**Status**: ✅ Completed"
           echo "**Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
           echo ""
@@ -381,7 +410,7 @@ runs:
           echo "- 💾 Volumes: **${volumes_count}** deleted"
           echo "- 🛡️ Images Protected: **${protected_count}** images"
           echo "- 🗑️ Old Images: **${images_count}** deleted"
-          if [[ "${{ inputs.cleanup_images_smart }}" == "true" ]]; then
+          if [[ "$INPUT_CLEANUP_IMAGES_SMART" == "true" ]]; then
             echo "- 🧠 Smart Cleanup: **${smart_unprotected}** images unprotected"
           fi
           echo ""
