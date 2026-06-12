@@ -1,6 +1,6 @@
 ---
-# SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
+# SPDX-License-Identifier: Apache-2.0
 
 name: 'Release Drafter'
 
@@ -9,48 +9,21 @@ on:
   push:
     branches:
       - main
-  # pull_request is required for autolabeler
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-  # pull_request_target is required for autolabeler on PRs from forks
-  pull_request_target:
-    types:
-      - opened
-      - synchronize
-      - reopened
 
 permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   update_release_draft:
     name: 'Update Release Draft'
-    # Run on pull_request_target for forks, or pull_request for same-repo PRs
-    # This prevents duplicate runs for same-repo PRs
-    # yamllint disable rule:line-length
-    if: >
-      (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.fork) ||
-      (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork) ||
-      github.event_name == 'push'
-    # yamllint enable rule:line-length
-    # SECURITY: pull_request_target with write permissions is safe here because:
-    # 1. This workflow does NOT checkout any code from the PR
-    # 2. The workflow code itself runs from the base branch (not the fork)
-    # 3. release-drafter only makes GitHub API calls (no code execution)
-    # 4. pull_request_target is needed ONLY for autolabeling fork PRs
     permissions:
       # write permission is required to create releases
       contents: write
-      # write permission is required for autolabeler
-      pull-requests: write
     runs-on: 'ubuntu-latest'
     timeout-minutes: 3
-    concurrency:
-      # yamllint disable-line rule:line-length
-      group: ${{ github.event.pull_request.number && format('rd-pr-{0}', github.event.pull_request.number) || format('rd-push-{0}', github.ref) }}
-      cancel-in-progress: true
     steps:
       # Harden the runner used by this workflow
       # yamllint disable-line rule:line-length
@@ -58,20 +31,5 @@ jobs:
         with:
           egress-policy: 'audit'
 
-      - name: 'Show concurrency group'
-        shell: bash
-        # yamllint disable rule:line-length
-        run: |
-          # Show concurrency group
-          {
-            echo '## Release Drafter'
-            echo "Concurrency group: ${{ github.event.pull_request.number && format('rd-pr-{0}', github.event.pull_request.number) || format('rd-push-{0}', github.ref) }}"
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "Concurrency group: ${{ github.event.pull_request.number && format('rd-pr-{0}', github.event.pull_request.number) || format('rd-push-{0}', github.ref) }}"
-        # yamllint enable rule:line-length
-
-      - name: 'Update draft release'
-        # yamllint disable-line rule:line-length
-        uses: release-drafter/release-drafter@267d2e0268deae5d44f3ba5029dd4d6e85f9d52d # v6.1.1
-        env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+      # yamllint disable-line rule:line-length
+      - uses: release-drafter/release-drafter@693d20e7c1ce1a81d3a41962f85914253b518449 # v7.3.1

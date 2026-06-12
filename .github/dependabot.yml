@@ -16,26 +16,3 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 15
-
-  # zizmor pin, consumed by .github/workflows/zizmor.yaml.
-  # The pin file is read by the workflow at run-time (with grep);
-  # pip never installs from it. This ecosystem entry exists solely so
-  # Dependabot keeps the pinned zizmor version current.
-  - package-ecosystem: "pip"
-    directory: "/.github/dependabot"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "Chore(deps)"
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 15
-    # Restrict to direct dependencies. The pin file declares only
-    # `zizmor` itself; the workflow never runs `pip install -r` against
-    # it (it greps the version and feeds it to `uvx --from`), so there
-    # is no lockfile and no place for Dependabot to express transitive
-    # updates. Without this filter Dependabot's resolver errors with
-    # "can't update vulnerable dependencies without a lockfile" whenever
-    # a transitive of zizmor carries a security advisory.
-    allow:
-      - dependency-type: "direct"

@@ -277,32 +277,14 @@ runs:
 
         echo "✅ OpenStack credentials configured"
 
-    - name: Setup environment variables
-      shell: bash
-      env:
-        INPUT_OPENSTACK_CLOUD: ${{ inputs.openstack_cloud }}
-        INPUT_JENKINS_URLS: ${{ inputs.jenkins_urls }}
-        INPUT_IMAGE_CLEANUP_AGE: ${{ inputs.image_cleanup_age }}
-        INPUT_ENABLE_DEBUG: ${{ inputs.enable_debug }}
-      run: |
-        # Sanitize inputs before writing to GITHUB_ENV (strip CR and LF to
-        # prevent env-file injection and CRLF inconsistencies across runners)
-        printf 'OS_CLOUD=%s\n' "$(printf '%s' "$INPUT_OPENSTACK_CLOUD" | tr -d '\r\n')" >> "$GITHUB_ENV"
-        printf 'JENKINS_URLS=%s\n' "$(printf '%s' "$INPUT_JENKINS_URLS" | tr -d '\r\n')" >> "$GITHUB_ENV"
-        printf 'OS_IMAGE_CLEANUP_AGE=%s\n' "$(printf '%s' "$INPUT_IMAGE_CLEANUP_AGE" | tr -d '\r\n')" >> "$GITHUB_ENV"
-        printf 'DEBUG=%s\n' "$(printf '%s' "$INPUT_ENABLE_DEBUG" | tr -d '\r\n')" >> "$GITHUB_ENV"
-
-        # Auto-detect repo URL from GitHub context
-        if [[ -n "${{ github.repository }}" ]]; then
-          repo_url="https://github.com/${{ github.repository }}"
-          echo "BUILDER_REPO_URL=$repo_url" >> "$GITHUB_ENV"
-          echo "GITHUB_REPOSITORY=${{ github.repository }}" >> "$GITHUB_ENV"
-        fi
-
     - name: Cleanup K8s Clusters
       if: ${{ inputs.cleanup_k8s_clusters == 'true' }}
       id: cleanup-k8s
       shell: bash
+      env:
+        OS_CLOUD: ${{ inputs.openstack_cloud }}
+        JENKINS_URLS: ${{ inputs.jenkins_urls }}
+        DEBUG: ${{ inputs.enable_debug }}
       run: |
         echo "🧹 Cleaning up orphaned K8s clusters..."
         path="${{ github.action_path }}/scripts/cleanup-k8s-clusters.sh"
@@ -312,6 +294,10 @@ runs:
       if: ${{ inputs.cleanup_stacks == 'true' }}
       id: cleanup-stacks
       shell: bash
+      env:
+        OS_CLOUD: ${{ inputs.openstack_cloud }}
+        JENKINS_URLS: ${{ inputs.jenkins_urls }}
+        DEBUG: ${{ inputs.enable_debug }}
       run: |
         echo "🧹 Cleaning up orphaned stacks..."
         bash "${{ github.action_path }}/scripts/cleanup-stacks.sh"
@@ -320,6 +306,10 @@ runs:
       if: ${{ inputs.cleanup_servers == 'true' }}
       id: cleanup-servers
       shell: bash
+      env:
+        OS_CLOUD: ${{ inputs.openstack_cloud }}
+        JENKINS_URLS: ${{ inputs.jenkins_urls }}
+        DEBUG: ${{ inputs.enable_debug }}
       run: |
         echo "🧹 Cleaning up orphaned servers..."
         bash "${{ github.action_path }}/scripts/cleanup-servers.sh"
@@ -328,6 +318,9 @@ runs:
       if: ${{ inputs.cleanup_ports == 'true' }}
       id: cleanup-ports
       shell: bash
+      env:
+        OS_CLOUD: ${{ inputs.openstack_cloud }}
+        DEBUG: ${{ inputs.enable_debug }}
       run: |
         echo "🧹 Cleaning up orphaned ports..."
         bash "${{ github.action_path }}/scripts/cleanup-ports.sh"
@@ -336,6 +329,9 @@ runs:
       if: ${{ inputs.cleanup_volumes == 'true' }}
       id: cleanup-volumes
       shell: bash
+      env:
+        OS_CLOUD: ${{ inputs.openstack_cloud }}
+        DEBUG: ${{ inputs.enable_debug }}
       run: |
         echo "🧹 Cleaning up orphaned volumes..."
         bash "${{ github.action_path }}/scripts/cleanup-volumes.sh"
@@ -344,6 +340,9 @@ runs:
       if: ${{ inputs.protect_images == 'true' }}
       id: protect-images
       shell: bash
+      env:
+        OS_CLOUD: ${{ inputs.openstack_cloud }}
+        DEBUG: ${{ inputs.enable_debug }}
       run: |
         echo "🛡️ Protecting in-use images..."
         bash "${{ github.action_path }}/scripts/protect-images.sh"
@@ -352,6 +351,10 @@ runs:
       if: ${{ inputs.cleanup_images == 'true' }}
       id: cleanup-images
       shell: bash
+      env:
+        OS_CLOUD: ${{ inputs.openstack_cloud }}
+        OS_IMAGE_CLEANUP_AGE: ${{ inputs.image_cleanup_age }}
+        DEBUG: ${{ inputs.enable_debug }}
       run: |
         echo "🧹 Cleaning up old images..."
         bash "${{ github.action_path }}/scripts/cleanup-old-images.sh"
@@ -360,6 +363,12 @@ runs:
       if: ${{ inputs.cleanup_images_smart == 'true' }}
       id: cleanup-images-smart
       shell: bash
+      env:
+        OS_CLOUD: ${{ inputs.openstack_cloud }}
+        OS_IMAGE_CLEANUP_AGE: ${{ inputs.image_cleanup_age }}
+        BUILDER_REPO_URL: https://github.com/${{ github.repository }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        DEBUG: ${{ inputs.enable_debug }}
       run: |
         echo "🧠 Running smart image cleanup..."
         bash "${{ github.action_path }}/scripts/cleanup-images-smart.sh"
