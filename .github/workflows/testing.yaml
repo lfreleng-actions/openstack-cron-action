@@ -12,10 +12,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
   test-syntax:
+    name: "Test action syntax"
     runs-on: ubuntu-latest
     # Default-deny at the workflow level; grant only the minimal scope the
     # job needs. actions/checkout requires contents:read (notably for
