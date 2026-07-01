@@ -13,6 +13,13 @@ on:
 
 permissions: {}
 
+# Serialise repeated runs for the same tag; never cancel an in-flight
+# release promotion. Distinct tags use distinct groups and proceed
+# independently.
+concurrency:
+  group: '${{ github.workflow }}-${{ github.ref }}'
+  cancel-in-progress: false
+
 jobs:
   validate_tag:
     name: 'Validate Tag'
@@ -53,7 +60,7 @@ jobs:
     needs: validate_tag
     runs-on: 'ubuntu-latest'
     permissions:
-      contents: write
+      contents: write  # Promote (publish) the draft release for the tag
     timeout-minutes: 5
     steps:
       # Harden the runner used by this workflow
