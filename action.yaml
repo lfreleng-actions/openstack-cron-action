@@ -285,10 +285,10 @@ runs:
         OS_CLOUD: ${{ inputs.openstack_cloud }}
         JENKINS_URLS: ${{ inputs.jenkins_urls }}
         DEBUG: ${{ inputs.enable_debug }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
         echo "🧹 Cleaning up orphaned K8s clusters..."
-        path="${{ github.action_path }}/scripts/cleanup-k8s-clusters.sh"
-        bash "$path"
+        bash "$ACTION_PATH/scripts/cleanup-k8s-clusters.sh"
 
     - name: Cleanup Stacks
       if: ${{ inputs.cleanup_stacks == 'true' }}
@@ -298,9 +298,10 @@ runs:
         OS_CLOUD: ${{ inputs.openstack_cloud }}
         JENKINS_URLS: ${{ inputs.jenkins_urls }}
         DEBUG: ${{ inputs.enable_debug }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
         echo "🧹 Cleaning up orphaned stacks..."
-        bash "${{ github.action_path }}/scripts/cleanup-stacks.sh"
+        bash "$ACTION_PATH/scripts/cleanup-stacks.sh"
 
     - name: Cleanup Servers
       if: ${{ inputs.cleanup_servers == 'true' }}
@@ -310,9 +311,10 @@ runs:
         OS_CLOUD: ${{ inputs.openstack_cloud }}
         JENKINS_URLS: ${{ inputs.jenkins_urls }}
         DEBUG: ${{ inputs.enable_debug }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
         echo "🧹 Cleaning up orphaned servers..."
-        bash "${{ github.action_path }}/scripts/cleanup-servers.sh"
+        bash "$ACTION_PATH/scripts/cleanup-servers.sh"
 
     - name: Cleanup Ports
       if: ${{ inputs.cleanup_ports == 'true' }}
@@ -321,9 +323,10 @@ runs:
       env:
         OS_CLOUD: ${{ inputs.openstack_cloud }}
         DEBUG: ${{ inputs.enable_debug }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
         echo "🧹 Cleaning up orphaned ports..."
-        bash "${{ github.action_path }}/scripts/cleanup-ports.sh"
+        bash "$ACTION_PATH/scripts/cleanup-ports.sh"
 
     - name: Cleanup Volumes
       if: ${{ inputs.cleanup_volumes == 'true' }}
@@ -332,9 +335,10 @@ runs:
       env:
         OS_CLOUD: ${{ inputs.openstack_cloud }}
         DEBUG: ${{ inputs.enable_debug }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
         echo "🧹 Cleaning up orphaned volumes..."
-        bash "${{ github.action_path }}/scripts/cleanup-volumes.sh"
+        bash "$ACTION_PATH/scripts/cleanup-volumes.sh"
 
     - name: Protect Images
       if: ${{ inputs.protect_images == 'true' }}
@@ -343,9 +347,10 @@ runs:
       env:
         OS_CLOUD: ${{ inputs.openstack_cloud }}
         DEBUG: ${{ inputs.enable_debug }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
         echo "🛡️ Protecting in-use images..."
-        bash "${{ github.action_path }}/scripts/protect-images.sh"
+        bash "$ACTION_PATH/scripts/protect-images.sh"
 
     - name: Cleanup Old Images
       if: ${{ inputs.cleanup_images == 'true' }}
@@ -355,9 +360,10 @@ runs:
         OS_CLOUD: ${{ inputs.openstack_cloud }}
         OS_IMAGE_CLEANUP_AGE: ${{ inputs.image_cleanup_age }}
         DEBUG: ${{ inputs.enable_debug }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
         echo "🧹 Cleaning up old images..."
-        bash "${{ github.action_path }}/scripts/cleanup-old-images.sh"
+        bash "$ACTION_PATH/scripts/cleanup-old-images.sh"
 
     - name: Smart Image Cleanup
       if: ${{ inputs.cleanup_images_smart == 'true' }}
@@ -369,9 +375,10 @@ runs:
         BUILDER_REPO_URL: https://github.com/${{ github.repository }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         DEBUG: ${{ inputs.enable_debug }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
         echo "🧠 Running smart image cleanup..."
-        bash "${{ github.action_path }}/scripts/cleanup-images-smart.sh"
+        bash "$ACTION_PATH/scripts/cleanup-images-smart.sh"
 
     - name: Generate cleanup summary
       if: always()
