@@ -71,6 +71,13 @@ inputs:
     required: false
     default: 'true'
 
+  orphan_server_age:
+    description: >-
+      Age in hours before orphaned Heat stack servers and Packer build
+      instances are removed, from 1 to 8760 (default: 24)
+    required: false
+    default: '24'
+
   cleanup_ports:
     description: 'Enable port cleanup'
     required: false
@@ -310,6 +317,7 @@ runs:
       env:
         OS_CLOUD: ${{ inputs.openstack_cloud }}
         JENKINS_URLS: ${{ inputs.jenkins_urls }}
+        ORPHAN_SERVER_AGE_HOURS: ${{ inputs.orphan_server_age }}
         DEBUG: ${{ inputs.enable_debug }}
         ACTION_PATH: ${{ github.action_path }}
       run: |

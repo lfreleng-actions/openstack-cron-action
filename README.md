@@ -113,6 +113,7 @@ This action performs scheduled cleanup of orphaned resources in OpenStack clouds
 |-------|-------------|---------|
 | `image_cleanup_age` | Age in days for image cleanup | `30` |
 | `port_cleanup_age` | Age for port cleanup | `30 minutes ago` |
+| `orphan_server_age` | Age in hours (1-8760) for orphaned stack/Packer server cleanup | `24` |
 | `python_version` | Python version to use | `3.11` |
 | `build_timeout` | Build timeout in minutes | `10` |
 
@@ -271,6 +272,11 @@ jobs:
 - Identifies orphaned server instances
 - Checks Jenkins for active minions
 - Removes servers not registered in Jenkins
+- Removes Heat stack servers (`<silo>-<n>-<n>-...`) that no existing
+  stack references (servers of failed stacks go with the stack
+  cleanup), and Packer build instances (`<distro>-<template>-<uuid>` with
+  server metadata `ci_managed=yes`), once older than
+  `orphan_server_age` hours
 
 ### 4. Ports (`cleanup_ports`)
 
@@ -316,6 +322,8 @@ When you set `jenkins_urls`, the action will:
 4. Clean up truly orphaned resources
 
 This prevents accidental deletion of resources needed by running jobs.
+Without `jenkins_urls`, server cleanup skips Jenkins minions and Heat
+stack servers; it still removes orphaned Packer build instances.
 
 ## Best Practices for Reusability
 
