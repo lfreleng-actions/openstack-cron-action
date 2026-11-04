@@ -120,6 +120,11 @@ inputs:
     required: false
     default: '3.11'
 
+  lftools_version:
+    description: 'Version of lftools-uv to install, as a plain version number'
+    required: false
+    default: '0.8.0'
+
   # Timeouts
   build_timeout:
     description: 'Build timeout in minutes'
@@ -170,6 +175,7 @@ runs:
         INPUT_OPENSTACK_CLOUD: ${{ inputs.openstack_cloud }}
         INPUT_CLOUDS_YAML: ${{ inputs.clouds_yaml }}
         INPUT_OPENSTACK_AUTH_URL: ${{ inputs.openstack_auth_url }}
+        INPUT_LFTOOLS_VERSION: ${{ inputs.lftools_version }}
       run: |
         if [[ -z "$INPUT_OPENSTACK_CLOUD" ]]; then
           echo "❌ Error: openstack_cloud is required"
@@ -182,6 +188,12 @@ runs:
           echo "❌ Error: Either clouds_yaml or OpenStack credentials required"
           echo "   Provide clouds_yaml OR" \
             "(auth_url + username + password + project_id)"
+          exit 1
+        fi
+
+        # Becomes part of a package specifier: accept a plain version only
+        if [[ ! "$INPUT_LFTOOLS_VERSION" =~ ^[0-9]+(\.[0-9]+)*([a-z]+[0-9]+)?$ ]]; then
+          echo "❌ Error: lftools_version must be a plain version, such as 0.8.0"
           exit 1
         fi
 
@@ -199,7 +211,6 @@ runs:
         echo "📦 Installing OpenStack dependencies..."
         pip install --upgrade pip --quiet
         pip install --quiet \
-          "lftools[openstack]" \
           python-openstackclient \
           python-heatclient \
           python-magnumclient \
@@ -208,6 +219,35 @@ runs:
           yq
 
         echo "✅ Dependencies installed"
+
+    - name: Install uv
+      # yamllint disable-line rule:line-length
+      uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      with:
+        # Keep setup-uv from reading a uv version from the caller's files
+        working-directory: ${{ github.action_path }}
+        # A restored cache would feed the tool that deletes cloud resources
+        enable-cache: false
+
+    # lftools-uv gets an environment of its own, so its dependencies cannot
+    # clash with the OpenStack clients above or with the caller's packages
+    - name: Install lftools-uv
+      id: lftools-uv
+      shell: bash
+      env:
+        LFTOOLS_UV_VERSION: ${{ inputs.lftools_version }}
+        UV_NO_CONFIG: '1'
+        UV_TOOL_DIR: ${{ runner.temp }}/openstack-cron-action/tools
+        UV_TOOL_BIN_DIR: ${{ runner.temp }}/openstack-cron-action/bin
+        UV_PYTHON_INSTALL_DIR: ${{ runner.temp }}/openstack-cron-action/python
+      run: |
+        echo "📦 Installing lftools-uv ${LFTOOLS_UV_VERSION}..."
+        uv tool install --quiet --python 3.12 \
+          "lftools-uv[openstack]==${LFTOOLS_UV_VERSION}"
+        "$UV_TOOL_BIN_DIR/lftools-uv" --version
+        # Handed to the steps that run it, rather than added to the caller's PATH
+        echo "path=$UV_TOOL_BIN_DIR/lftools-uv" >> "$GITHUB_OUTPUT"
+        echo "✅ lftools-uv installed"
 
     - name: Configure OpenStack credentials
       shell: bash
@@ -291,6 +331,7 @@ runs:
       env:
         OS_CLOUD: ${{ inputs.openstack_cloud }}
         JENKINS_URLS: ${{ inputs.jenkins_urls }}
+        LFTOOLS_UV: ${{ steps.lftools-uv.outputs.path }}
         DEBUG: ${{ inputs.enable_debug }}
         ACTION_PATH: ${{ github.action_path }}
       run: |
@@ -304,6 +345,7 @@ runs:
       env:
         OS_CLOUD: ${{ inputs.openstack_cloud }}
         JENKINS_URLS: ${{ inputs.jenkins_urls }}
+        LFTOOLS_UV: ${{ steps.lftools-uv.outputs.path }}
         DEBUG: ${{ inputs.enable_debug }}
         ACTION_PATH: ${{ github.action_path }}
       run: |
@@ -367,6 +409,7 @@ runs:
       env:
         OS_CLOUD: ${{ inputs.openstack_cloud }}
         OS_IMAGE_CLEANUP_AGE: ${{ inputs.image_cleanup_age }}
+        LFTOOLS_UV: ${{ steps.lftools-uv.outputs.path }}
         DEBUG: ${{ inputs.enable_debug }}
         ACTION_PATH: ${{ github.action_path }}
       run: |
@@ -404,6 +447,7 @@ runs:
         STEP_IMAGES_COUNT: ${{ steps.cleanup-images.outputs.deleted_count || '0' }}
         STEP_SMART_UNPROTECTED: ${{ steps.cleanup-images-smart.outputs.unprotected_count || '0' }}
         STEP_STACKS_FAILED: ${{ steps.cleanup-stacks.outputs.failed || 'false' }}
+        STEP_K8S_FAILED: ${{ steps.cleanup-k8s.outputs.failed || 'false' }}
       run: |
         # Collect outputs from all steps
         k8s_count="${STEP_K8S_COUNT:-0}"
@@ -419,8 +463,15 @@ runs:
         sum2=$((ports_count + volumes_count + images_count))
         total=$((sum1 + sum2))
 
-        if [[ "$STEP_STACKS_FAILED" == "true" ]]; then
+        if [[ "$STEP_STACKS_FAILED" == "true" ]] && \
+           [[ "$STEP_K8S_FAILED" == "true" ]]; then
+          status_line="❌ K8s cluster and stack cleanup failed"
+          status="failure"
+        elif [[ "$STEP_STACKS_FAILED" == "true" ]]; then
           status_line="❌ Stack cleanup failed"
+          status="failure"
+        elif [[ "$STEP_K8S_FAILED" == "true" ]]; then
+          status_line="❌ K8s cluster cleanup failed"
           status="failure"
         else
           status_line="✅ Completed"
@@ -455,9 +506,19 @@ runs:
         echo "resources_cleaned=${total}" >> "$GITHUB_OUTPUT"
         echo "status=${status}" >> "$GITHUB_OUTPUT"
 
-    - name: Fail on stack cleanup errors
-      if: ${{ always() && steps.cleanup-stacks.outputs.failed == 'true' }}
+    - name: Fail on cleanup errors
+      if: >-
+        ${{ always() && (steps.cleanup-stacks.outputs.failed == 'true'
+        || steps.cleanup-k8s.outputs.failed == 'true') }}
       shell: bash
+      env:
+        STEP_STACKS_FAILED: ${{ steps.cleanup-stacks.outputs.failed || 'false' }}
+        STEP_K8S_FAILED: ${{ steps.cleanup-k8s.outputs.failed || 'false' }}
       run: |
-        echo "::error::Stack cleanup failed; see the Cleanup Stacks step log"
+        if [[ "$STEP_K8S_FAILED" == "true" ]]; then
+          echo "::error::K8s cluster cleanup failed; see the Cleanup K8s Clusters step log"
+        fi
+        if [[ "$STEP_STACKS_FAILED" == "true" ]]; then
+          echo "::error::Stack cleanup failed; see the Cleanup Stacks step log"
+        fi
         exit 1

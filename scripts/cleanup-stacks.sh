@@ -8,6 +8,8 @@
 
 os_cloud="${OS_CLOUD:-vex}"
 jenkins_urls="${JENKINS_URLS:-}"
+# Path the action installed lftools-uv to; otherwise found on PATH
+lftools_uv="${LFTOOLS_UV:-lftools-uv}"
 DEBUG="${DEBUG:-false}"
 
 # Set verbose mode only if debug enabled
@@ -22,15 +24,15 @@ if [[ "$DEBUG" == "true" ]]; then
     echo "INFO: Checking for orphaned stacks on cloud: $os_cloud"
 fi
 
-# Use lftools to cleanup orphaned stacks
+# Use lftools-uv to cleanup orphaned stacks
 if [[ -n "$jenkins_urls" ]]; then
     if [[ "$DEBUG" == "true" ]]; then
         echo "INFO: Will check Jenkins URLs for active builds: $jenkins_urls"
     fi
-    # lftools stack delete-stale takes jenkins URLs as positional arguments
+    # lftools-uv stack delete-stale takes jenkins URLs as positional arguments
     # shellcheck disable=SC2086
-    if lftools openstack --os-cloud "$os_cloud" stack delete-stale $jenkins_urls; then
-        # Note: lftools doesn't return count, so we set a placeholder
+    if "$lftools_uv" openstack --os-cloud "$os_cloud" stack delete-stale $jenkins_urls; then
+        # Note: lftools-uv doesn't return count, so we set a placeholder
         echo "deleted_count=0" >> "${GITHUB_OUTPUT:-/dev/null}"
         echo "✅ Stack cleanup complete"
     else
