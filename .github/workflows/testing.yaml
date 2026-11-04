@@ -59,6 +59,29 @@ jobs:
           shellcheck scripts/*.sh
           echo "✅ Shellcheck passed"
 
+      - name: Test port cleanup creates its temporary file
+        run: |
+          set -euo pipefail
+          # uutils mktemp, which Ubuntu 26.04 ships, reads a separate
+          # '--suffix' argument that starts with '-' as further options
+          if grep -n -E -- '--suffix[[:space:]]+-' scripts/*.sh; then
+            echo "::error::Pass a suffix starting with '-' as --suffix=VALUE"
+            exit 1
+          fi
+
+          mkdir -p stub
+          printf '#!/bin/sh\nexit 0\n' > stub/openstack
+          chmod +x stub/openstack
+          : > ports.env
+          if ! PATH="$PWD/stub:$PATH" GITHUB_OUTPUT="$PWD/ports.env" \
+              OS_CLOUD=vex bash scripts/cleanup-ports.sh > ports.log 2>&1; then
+            cat ports.log
+            exit 1
+          fi
+          grep -qx 'deleted_count=0' ports.env
+          echo "✅ port cleanup runs with $(mktemp --version | head -n 1)"
+          rm -rf stub ports.env ports.log
+
       - name: Test old image cleanup no-op guard
         run: |
           set -euo pipefail
