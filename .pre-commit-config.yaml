@@ -89,10 +89,13 @@ repos:
     hooks:
       - id: reuse
 
-  # Replaces: https://github.com/rhysd/actionlint
-  # Permits actionlint to run both locally and with precommit.ci/GitHub
-  - repo: https://github.com/Mateusz-Grzelinski/actionlint-py
-    rev: 357f7eec6dec49bf7693dc0dbec30212226d5492  # frozen: v1.7.12.25
+  # Actively maintained fork of https://github.com/rhysd/actionlint.
+  # Upstream v1.7.12 predates GitHub's self-repository 'uses: $/{path}'
+  # syntax and rejects it, which conflicts with zizmor's self-repository
+  # audit; this fork understands it. Pinned as lfreleng-actions/.github
+  # pins it.
+  - repo: https://github.com/kjanat/actionlint
+    rev: 08bb2c4f0d039744455b87aef1c647fb8b66d37b  # frozen: v1.17.0
     hooks:
       - id: actionlint
 

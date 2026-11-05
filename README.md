@@ -72,6 +72,7 @@ This action performs scheduled cleanup of orphaned resources in OpenStack clouds
     image_cleanup_age: '30'  # days
     port_cleanup_age: '30 minutes ago'
     python_version: '3.11'
+    lftools_version: '0.8.0'
     build_timeout: '10'  # minutes
 ```
 
@@ -115,6 +116,7 @@ This action performs scheduled cleanup of orphaned resources in OpenStack clouds
 | `port_cleanup_age` | Age for port cleanup | `30 minutes ago` |
 | `orphan_server_age` | Age in hours (1-8760) for orphaned stack/Packer server cleanup | `24` |
 | `python_version` | Python version to use | `3.11` |
+| `lftools_version` | Version of [lftools-uv](https://github.com/lfreleng-actions/lftools-uv) to install, as a plain version number | `0.8.0` |
 | `build_timeout` | Build timeout in minutes | `10` |
 
 #### Notification Parameters
@@ -255,9 +257,14 @@ jobs:
 
 ### 1. K8s Clusters (`cleanup_k8s_clusters`)
 
-- Identifies orphaned Kubernetes clusters
-- Checks Jenkins for active builds using the cluster
-- Removes clusters not in active use
+- Identifies orphaned Kubernetes clusters, with `lftools-uv openstack
+  cluster cleanup`
+- Checks Jenkins for active builds using the cluster, and deletes nothing
+  when it cannot read any one Jenkins
+- Removes clusters not in active use, keeping long-lived
+  `-managed-prod-k8s-` and `-managed-test-k8s-` clusters
+- A cluster cleanup error fails the action after the remaining cleanup
+  steps run, so the failure notification fires
 
 ### 2. Stacks (`cleanup_stacks`)
 
@@ -303,8 +310,11 @@ jobs:
 - OpenStack cloud with API access
 - Valid `clouds.yaml` configuration
 - Python 3.11+ (automatically installed)
+- [lftools-uv](https://github.com/lfreleng-actions/lftools-uv)
+  (automatically installed with `uv`, in an environment of its own, so its
+  dependencies cannot clash with the packages below; requires lftools-uv 0.8.0
+  or later)
 - Dependencies (automatically installed):
-  - `lftools[openstack]`
   - `python-openstackclient`
   - `python-heatclient`
   - `python-magnumclient`
@@ -431,7 +441,7 @@ Apache-2.0 - See [LICENSE](LICENSE) for details.
 ## Related
 
 - [packer-build-action](../packer-build-action/) - Build OpenStack images
-- [lftools Documentation](https://docs.releng.linuxfoundation.org/projects/lftools/)
+- [lftools-uv](https://github.com/lfreleng-actions/lftools-uv)
 - [OpenStack CLI](https://docs.openstack.org/python-openstackclient/latest/)
 
 ---

@@ -59,47 +59,205 @@ jobs:
           shellcheck scripts/*.sh
           echo "✅ Shellcheck passed"
 
+      - name: Test port cleanup creates its temporary file
+        run: |
+          set -euo pipefail
+          # uutils mktemp, which Ubuntu 26.04 ships, reads a separate
+          # '--suffix' argument that starts with '-' as further options
+          if grep -n -E -- '--suffix[[:space:]]+-' scripts/*.sh; then
+            echo "::error::Pass a suffix starting with '-' as --suffix=VALUE"
+            exit 1
+          fi
+
+          mkdir -p stub
+          printf '#!/bin/sh\nexit 0\n' > stub/openstack
+          chmod +x stub/openstack
+          : > ports.env
+          if ! PATH="$PWD/stub:$PATH" GITHUB_OUTPUT="$PWD/ports.env" \
+              OS_CLOUD=vex bash scripts/cleanup-ports.sh > ports.log 2>&1; then
+            cat ports.log
+            exit 1
+          fi
+          grep -qx 'deleted_count=0' ports.env
+          echo "✅ port cleanup runs with $(mktemp --version | head -n 1)"
+          rm -rf stub ports.env ports.log
+
       - name: Test old image cleanup no-op guard
         run: |
           set -euo pipefail
           mkdir -p stub
-          cat > stub/lftools <<'EOT'
+          cat > stub/lftools-uv <<'EOT'
           #!/bin/bash
           cat "$FAKE_OUT"
-          exit 1
+          exit "$FAKE_RC"
           EOT
-          chmod +x stub/lftools
+          chmod +x stub/lftools-uv
 
-          # lftools selected images but skipped every one of them
+          # lftools-uv selected images but skipped every one of them
           cat > noop.txt <<'EOT'
           Removing 67 images from vex.
           WARNING: More than one Image exists with the name 'dup'.. Skipping image...
           EOT
-          # lftools removed everything it selected
+          # lftools-uv removed everything it selected
           cat > ok.txt <<'EOT'
           Removing 2 images from vex.
-          Removed "img-a" from vex.
-          Removed "img-b" from vex.
+          Removed "img-a" (id-a) from vex.
+          Removed "img-b" (id-b) from vex.
           EOT
 
           run_case() {
-            PATH="$PWD/stub:$PATH" FAKE_OUT="$PWD/$1" GITHUB_OUTPUT="$PWD/$2" \
-              OS_CLOUD=vex bash scripts/cleanup-old-images.sh > "$3" 2>&1
+            PATH="$PWD/stub:$PATH" FAKE_OUT="$PWD/$1" FAKE_RC="$2" \
+              GITHUB_OUTPUT="$PWD/$3" OS_CLOUD=vex \
+              bash scripts/cleanup-old-images.sh > "$4" 2>&1
           }
 
-          # A failing lftools must not abort the step or the stages after it
+          # A failing lftools-uv must not abort the step or the stages after it
           : > noop.env
-          run_case noop.txt noop.env noop.log
+          run_case noop.txt 1 noop.env noop.log
           grep -qx 'targeted_count=67' noop.env
           grep -qx 'deleted_count=0' noop.env
-          grep -q '::warning' noop.log
+          grep -q '::warning title=Image cleanup removed nothing' noop.log
+          grep -q '::warning title=Image cleanup reported errors::lftools-uv exited 1' noop.log
           echo "✅ no-op run warns and exits 0"
 
           : > ok.env
-          run_case ok.txt ok.env ok.log
+          run_case ok.txt 0 ok.env ok.log
           grep -qx 'targeted_count=2' ok.env
           grep -qx 'deleted_count=2' ok.env
           grep -q '::warning' ok.log && exit 1
           echo "✅ healthy run does not warn"
 
           rm -rf stub noop.txt ok.txt noop.env ok.env noop.log ok.log
+
+      - name: Test K8s cluster cleanup
+        run: |
+          set -euo pipefail
+          mkdir -p stub
+          cat > stub/lftools-uv <<'EOT'
+          #!/bin/bash
+          printf '[%s]' "$@" > "$CALLED"
+          cat "$FAKE_OUT"
+          exit "$FAKE_RC"
+          EOT
+          chmod +x stub/lftools-uv
+
+          cat > deleted.txt <<'EOT'
+          Deleting orphaned k8s cluster: orphan-a
+          Successfully deleted cluster: orphan-a
+          Deleting orphaned k8s cluster: orphan-b
+          Successfully deleted cluster: orphan-b
+          Deleted 2 orphaned cluster(s)
+          EOT
+          cat > failed.txt <<'EOT'
+          Deleting orphaned k8s cluster: orphan-a
+          Failed to delete cluster orphan-a: boom
+          Deleted 0 orphaned cluster(s)
+          EOT
+
+          run_case() {
+            : > "$1.env"
+            PATH="$PWD/stub:$PATH" GITHUB_OUTPUT="$PWD/$1.env" \
+              CALLED="$PWD/$1.called" FAKE_OUT="$PWD/$2" FAKE_RC="$3" \
+              OS_CLOUD=vex JENKINS_URLS="$4" \
+              bash scripts/cleanup-k8s-clusters.sh > "$1.log" 2>&1
+          }
+
+          urls="https://jenkins.example.org/a https://jenkins.example.org/b"
+          run_case ok deleted.txt 0 "$urls"
+          # The URLs travel as one --jenkins value, as lftools-uv expects
+          expected="[openstack][--os-cloud][vex][cluster][cleanup]"
+          expected+="[--jenkins][$urls]"
+          [[ "$(cat ok.called)" == "$expected" ]]
+          grep -qx 'deleted_count=2' ok.env
+          grep -q 'failed=' ok.env && exit 1
+          echo "✅ runs lftools-uv cluster cleanup and counts its deletes"
+
+          run_case failing failed.txt 1 "$urls"
+          grep -qx 'deleted_count=0' failing.env
+          grep -qx 'failed=true' failing.env
+          grep -q '::error::K8s cluster cleanup failed' failing.log
+          echo "✅ a failed cluster cleanup marks the step failed"
+
+          run_case skipped deleted.txt 0 ""
+          [[ ! -e skipped.called ]]
+          grep -qx 'deleted_count=0' skipped.env
+          echo "✅ skips without Jenkins URLs"
+
+          rm -rf stub deleted.txt failed.txt ok.* failing.* skipped.*
+
+      - name: Test stack cleanup
+        run: |
+          set -euo pipefail
+          mkdir -p stub
+          cat > stub/lftools-uv <<'EOT'
+          #!/bin/bash
+          echo "$*" > "$CALLED"
+          exit "$FAKE_RC"
+          EOT
+          chmod +x stub/lftools-uv
+
+          run_case() {
+            : > "$1.env"
+            PATH="$PWD/stub:$PATH" GITHUB_OUTPUT="$PWD/$1.env" \
+              CALLED="$PWD/$1.called" FAKE_RC="$2" OS_CLOUD=vex \
+              JENKINS_URLS="https://jenkins.example.org/a https://jenkins.example.org/b" \
+              bash scripts/cleanup-stacks.sh > "$1.log" 2>&1
+          }
+
+          run_case ok 0
+          expected="openstack --os-cloud vex stack delete-stale"
+          expected+=" https://jenkins.example.org/a https://jenkins.example.org/b"
+          [[ "$(cat ok.called)" == "$expected" ]]
+          grep -q 'failed=' ok.env && exit 1
+          echo "✅ passes each Jenkins URL to lftools-uv stack delete-stale"
+
+          run_case failing 1
+          grep -qx 'failed=true' failing.env
+          echo "✅ a failed stack cleanup marks the step failed"
+
+          rm -rf stub ok.* failing.*
+
+  test-action:
+    name: "Test action install"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Write a placeholder clouds.yaml
+        id: clouds
+        run: |
+          clouds=$(printf 'clouds:\n  vex:\n    auth:\n      auth_url: https://openstack.example.org\n' | base64 -w0)
+          echo "clouds_yaml=$clouds" >> "$GITHUB_OUTPUT"
+
+      # Every cleanup is off: this runs only the setup steps
+      - name: Run the action
+        uses: $/
+        with:
+          openstack_cloud: vex
+          clouds_yaml: ${{ steps.clouds.outputs.clouds_yaml }}
+          cleanup_k8s_clusters: 'false'
+          cleanup_stacks: 'false'
+          cleanup_servers: 'false'
+          cleanup_ports: 'false'
+          cleanup_volumes: 'false'
+          protect_images: 'false'
+          cleanup_images: 'false'
+
+      - name: Check the installed tools
+        run: |
+          set -euo pipefail
+          lftools_uv="$RUNNER_TEMP/openstack-cron-action/bin/lftools-uv"
+          "$lftools_uv" --version | grep -qx 'lftools-uv 0.8.0'
+          "$lftools_uv" openstack --os-cloud vex stack delete-stale --help > /dev/null
+          "$lftools_uv" openstack --os-cloud vex cluster cleanup --help > /dev/null
+          "$lftools_uv" openstack --os-cloud vex image cleanup --help > /dev/null
+          if command -v lftools-uv lftools; then
+            echo "::error::The action left lftools-uv or legacy lftools on PATH"
+            exit 1
+          fi
+          echo "✅ lftools-uv installed for the action alone; legacy lftools absent"

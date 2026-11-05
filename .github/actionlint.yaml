@@ -3,8 +3,18 @@
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
 # Path-specific configurations for actionlint
-# Add ignored rules per workflow file as needed
-# paths:
-#   .github/workflows/testing.yaml:
-#     ignore:
-#       - 'example rule to ignore'
+paths:
+  .github/workflows/testing.yaml:
+    ignore:
+      # GitHub introduced the self-repository 'uses: $/...' syntax in
+      # July 2026, and zizmor's self-repository audit (v1.30.0+) reports
+      # the older workspace-relative './' form as a finding. This fork of
+      # actionlint understands '$/{path}', but deliberately rejects a
+      # bare '$/' because actions/runner's TryParseSelfRepository helper
+      # refuses an empty path. GitHub's server-side workflow parser does
+      # accept it: an action at the repository root has no {path}, and a
+      # bare '$/' resolves and runs.
+      #
+      # The closing quote sits immediately after '$/', so malformed
+      # extra-slash forms such as '$//' are still reported.
+      - 'specifying action "\$/" in invalid format because path is missing'
