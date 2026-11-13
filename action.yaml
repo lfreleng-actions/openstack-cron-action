@@ -280,7 +280,7 @@ runs:
           username="$INPUT_OPENSTACK_USERNAME"
 
           # Decode password if base64 encoded (silent for security)
-          password="$INPUT_OPENSTACK_PASSWORD"
+          password=$INPUT_OPENSTACK_PASSWORD
           if printf '%s' "$password" | base64 -d &> /dev/null; then
             password=$(printf '%s' "$password" | base64 -d)
           fi
