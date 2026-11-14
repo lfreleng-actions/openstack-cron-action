@@ -220,14 +220,33 @@ runs:
 
         echo "✅ Dependencies installed"
 
+    # With UV_NO_MODIFY_PATH set, setup-uv leaves its uv off PATH, and the
+    # later steps would run whichever uv the caller's PATH holds instead
+    - name: Refuse an inherited UV_NO_MODIFY_PATH
+      shell: bash
+      run: |
+        if [[ -n "${UV_NO_MODIFY_PATH+set}" ]]; then
+          echo "❌ Error: UV_NO_MODIFY_PATH is set; unset it before" \
+            "calling this action"
+          exit 1
+        fi
+
     - name: Install uv
       # yamllint disable-line rule:line-length
       uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      env:
+        # Invalid on purpose: uv then refuses to look up an interpreter,
+        # so neither the caller's PATH nor its uv settings choose one
+        UV_PYTHON_PREFERENCE: none
+        UV_PYTHON_ARCH: ''
+        UV_PYTHON_INSTALL_DIR: ${{ runner.temp }}/openstack-cron-action/python
       with:
         # Keep setup-uv from reading a uv version from the caller's files
         working-directory: ${{ github.action_path }}
         # A restored cache would feed the tool that deletes cloud resources
         enable-cache: false
+        # Kept apart from the lftools-uv bin directory, which stays off PATH
+        tool-bin-dir: ${{ runner.temp }}/openstack-cron-action/uv-bin
 
     # lftools-uv gets an environment of its own, so its dependencies cannot
     # clash with the OpenStack clients above or with the caller's packages
@@ -280,7 +299,7 @@ runs:
           username="$INPUT_OPENSTACK_USERNAME"
 
           # Decode password if base64 encoded (silent for security)
-          password="$INPUT_OPENSTACK_PASSWORD"
+          password=$INPUT_OPENSTACK_PASSWORD
           if printf '%s' "$password" | base64 -d &> /dev/null; then
             password=$(printf '%s' "$password" | base64 -d)
           fi
