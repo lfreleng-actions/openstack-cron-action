@@ -321,6 +321,9 @@ jobs:
   - `kubernetes`
   - `niet`
   - `yq`
+  - `openstacksdk`, any release except 4.23.0, which ships without its data
+    files ([bug 2175057](https://bugs.launchpad.net/openstacksdk/+bug/2175057));
+    the action excludes it from both installs
 
 ## Jenkins Integration
 

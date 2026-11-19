@@ -210,13 +210,17 @@ runs:
       run: |
         echo "📦 Installing OpenStack dependencies..."
         pip install --upgrade pip --quiet
+        # openstacksdk 4.23.0 ships without its data files, so it cannot
+        # load a cloud configuration:
+        # https://bugs.launchpad.net/openstacksdk/+bug/2175057
         pip install --quiet \
           python-openstackclient \
           python-heatclient \
           python-magnumclient \
           kubernetes \
           niet \
-          yq
+          yq \
+          'openstacksdk!=4.23.0'
 
         echo "✅ Dependencies installed"
 
@@ -261,7 +265,11 @@ runs:
         UV_PYTHON_INSTALL_DIR: ${{ runner.temp }}/openstack-cron-action/python
       run: |
         echo "📦 Installing lftools-uv ${LFTOOLS_UV_VERSION}..."
+        # Older lftools-uv releases accept openstacksdk 4.23.0, which ships
+        # without its data files and cannot load a cloud configuration:
+        # https://bugs.launchpad.net/openstacksdk/+bug/2175057
         uv tool install --quiet --python 3.12 \
+          --with 'openstacksdk!=4.23.0' \
           "lftools-uv[openstack]==${LFTOOLS_UV_VERSION}"
         "$UV_TOOL_BIN_DIR/lftools-uv" --version
         # Handed to the steps that run it, rather than added to the caller's PATH
