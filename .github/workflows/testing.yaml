@@ -82,6 +82,60 @@ jobs:
           echo "✅ port cleanup runs with $(mktemp --version | head -n 1)"
           rm -rf stub ports.env ports.log
 
+      - name: Test port cleanup skips ports it cannot age
+        run: |
+          set -euo pipefail
+          mkdir -p stub
+          # Three DOWN ports: p1 has no creation time, p2 is gone by the
+          # time 'port show' runs, and p3 is older than the cutoff
+          cat > stub/openstack <<'EOT'
+          #!/bin/bash
+          case "$*" in
+            *"port list"*) printf 'p1 DOWN\np2 DOWN\np3 DOWN\np4 ACTIVE\n' ;;
+            *"port show"*p1) echo None ;;
+            *"port show"*p2) echo "No Port found for p2" >&2; exit 1 ;;
+            *"port show"*p3) echo 2020-01-01T00:00:00Z ;;
+            *"port delete"*)
+              echo "$*" >> "$DELETE_LOG"
+              if [[ -n "${DELETE_ERROR:-}" ]]; then
+                echo "Failed to delete port with name or ID 'p3': $DELETE_ERROR" >&2
+                echo "1 of 1 ports failed to delete." >&2
+                exit 1
+              fi
+              ;;
+            *) echo "unexpected call: $*" >&2; exit 2 ;;
+          esac
+          EOT
+          chmod +x stub/openstack
+
+          run_case() {
+            : > deletes.log
+            PATH="$PWD/stub:$PATH" DELETE_LOG="$PWD/deletes.log" \
+              GITHUB_OUTPUT=/dev/null OS_CLOUD=vex DEBUG="$1" \
+              bash scripts/cleanup-ports.sh > ports.log 2>&1
+          }
+
+          for debug in false true; do
+            if ! run_case "$debug"; then
+              cat ports.log
+              echo "::error::Port cleanup failed with DEBUG=$debug"
+              exit 1
+            fi
+            grep -q 'Deleted 3 orphaned port(s)' ports.log
+            [[ "$(cat deletes.log)" == "--os-cloud vex port delete p3" ]]
+            echo "✅ skipped ports do not fail the run with DEBUG=$debug"
+          done
+
+          # Any other delete failure still fails the run and names the port
+          if DELETE_ERROR="HttpException: 500" run_case false; then
+            cat ports.log
+            echo "::error::A failed port delete did not fail the run"
+            exit 1
+          fi
+          grep -q 'failed to delete port p3: .*HttpException: 500' ports.log
+          echo "✅ a failed port delete fails the run and names the port"
+          rm -rf stub deletes.log ports.log
+
       - name: Test old image cleanup no-op guard
         run: |
           set -euo pipefail
