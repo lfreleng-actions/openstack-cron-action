@@ -72,7 +72,7 @@ This action performs scheduled cleanup of orphaned resources in OpenStack clouds
     image_cleanup_age: '30'  # days
     port_cleanup_age: '30 minutes ago'
     python_version: '3.11'
-    lftools_version: '0.8.0'
+    lftools_version: '0.11.0'
     build_timeout: '10'  # minutes
 ```
 
@@ -116,7 +116,7 @@ This action performs scheduled cleanup of orphaned resources in OpenStack clouds
 | `port_cleanup_age` | Age for port cleanup | `30 minutes ago` |
 | `orphan_server_age` | Age in hours (1-8760) for orphaned stack/Packer server cleanup | `24` |
 | `python_version` | Python version to use | `3.11` |
-| `lftools_version` | Version of [lftools-uv](https://github.com/lfreleng-actions/lftools-uv) to install, as a plain version number | `0.8.0` |
+| `lftools_version` | Version of [lftools-uv](https://github.com/lfreleng-actions/lftools-uv) to install, as a plain version number, 0.11.0 or later; installed with its `pinned` extra | `0.11.0` |
 | `build_timeout` | Build timeout in minutes | `10` |
 
 #### Notification Parameters
@@ -312,8 +312,11 @@ jobs:
 - Python 3.11+ (automatically installed)
 - [lftools-uv](https://github.com/lfreleng-actions/lftools-uv)
   (automatically installed with `uv`, in an environment of its own, so its
-  dependencies cannot clash with the packages below; requires lftools-uv 0.8.0
-  or later)
+  dependencies cannot clash with the packages below). The action installs it
+  with its `pinned` extra, which names the exact version lftools-uv's lock file
+  records for every dependency, so each run gets the same dependencies until
+  `lftools_version` changes. The action refuses an `lftools_version` older
+  than 0.11.0, the first release with that extra
 - Dependencies (automatically installed):
   - `python-openstackclient`
   - `python-heatclient`
@@ -323,7 +326,8 @@ jobs:
   - `yq`
   - `openstacksdk`, any release except 4.23.0, which ships without its data
     files ([bug 2175057](https://bugs.launchpad.net/openstacksdk/+bug/2175057));
-    the action excludes it from both installs
+    the action excludes it from this install, and the `pinned` extra fixes the
+    version lftools-uv gets
 
 ## Jenkins Integration
 

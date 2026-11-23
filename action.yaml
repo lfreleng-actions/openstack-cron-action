@@ -121,9 +121,11 @@ inputs:
     default: '3.11'
 
   lftools_version:
-    description: 'Version of lftools-uv to install, as a plain version number'
+    description: >
+      Version of lftools-uv to install, as a plain version number; 0.11.0
+      or later, installed with the dependency versions its pinned extra names
     required: false
-    default: '0.8.0'
+    default: '0.11.0'
 
   # Timeouts
   build_timeout:
@@ -193,7 +195,36 @@ runs:
 
         # Becomes part of a package specifier: accept a plain version only
         if [[ ! "$INPUT_LFTOOLS_VERSION" =~ ^[0-9]+(\.[0-9]+)*([a-z]+[0-9]+)?$ ]]; then
-          echo "❌ Error: lftools_version must be a plain version, such as 0.8.0"
+          echo "❌ Error: lftools_version must be a plain version, such as 0.11.0"
+          exit 1
+        fi
+
+        # Older releases lack the pinned extra; uv installs them without it,
+        # warning only, so their dependencies would float. Compare each
+        # release number in turn, and count a pre-release as older than its
+        # release, as Python packaging does; a post-release (post, rev or r)
+        # is newer than its release.
+        release="${INPUT_LFTOOLS_VERSION%%[a-z]*}"
+        suffix="${INPUT_LFTOOLS_VERSION#"$release"}"
+        IFS=. read -ra have <<< "$release"
+        need=(0 11 0)
+        order=0
+        count=$(( ${#have[@]} > ${#need[@]} ? ${#have[@]} : ${#need[@]} ))
+        for (( i = 0; i < count; i++ )); do
+          a=$(( 10#${have[i]:-0} ))
+          b=${need[i]:-0}
+          if (( a != b )); then
+            order=$(( a > b ? 1 : -1 ))
+            break
+          fi
+        done
+        if (( order == 0 )) && [[ -n "$suffix" ]] && \
+           [[ ! "$suffix" =~ ^(post|rev|r)[0-9]+$ ]]; then
+          order=-1
+        fi
+        if (( order < 0 )); then
+          echo "❌ Error: lftools_version must be 0.11.0 or later, the first" \
+            "lftools-uv release with the pinned extra"
           exit 1
         fi
 
@@ -265,12 +296,11 @@ runs:
         UV_PYTHON_INSTALL_DIR: ${{ runner.temp }}/openstack-cron-action/python
       run: |
         echo "📦 Installing lftools-uv ${LFTOOLS_UV_VERSION}..."
-        # Older lftools-uv releases accept openstacksdk 4.23.0, which ships
-        # without its data files and cannot load a cloud configuration:
-        # https://bugs.launchpad.net/openstacksdk/+bug/2175057
+        # The pinned extra names the exact version lftools-uv's lock file
+        # records for each dependency, so a new upstream release cannot
+        # reach the cleanup until lftools_version changes
         uv tool install --quiet --python 3.12 \
-          --with 'openstacksdk!=4.23.0' \
-          "lftools-uv[openstack]==${LFTOOLS_UV_VERSION}"
+          "lftools-uv[pinned]==${LFTOOLS_UV_VERSION}"
         "$UV_TOOL_BIN_DIR/lftools-uv" --version
         # Handed to the steps that run it, rather than added to the caller's PATH
         echo "path=$UV_TOOL_BIN_DIR/lftools-uv" >> "$GITHUB_OUTPUT"
