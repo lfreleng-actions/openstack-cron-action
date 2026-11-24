@@ -306,7 +306,15 @@ jobs:
         run: |
           set -euo pipefail
           lftools_uv="$RUNNER_TEMP/openstack-cron-action/bin/lftools-uv"
-          "$lftools_uv" --version | grep -qx 'lftools-uv 0.8.0'
+          "$lftools_uv" --version | grep -qx 'lftools-uv 0.11.0'
+          # The pinned extra fixes openstacksdk; without it uv picks a newer one
+          tool_python="$RUNNER_TEMP/openstack-cron-action/tools/lftools-uv/bin/python"
+          sdk=$("$tool_python" -c \
+            'import importlib.metadata as m; print(m.version("openstacksdk"))')
+          if [[ "$sdk" != "4.22.0" ]]; then
+            echo "::error::lftools-uv has openstacksdk $sdk, not the pinned 4.22.0"
+            exit 1
+          fi
           "$lftools_uv" openstack --os-cloud vex stack delete-stale --help > /dev/null
           "$lftools_uv" openstack --os-cloud vex cluster cleanup --help > /dev/null
           "$lftools_uv" openstack --os-cloud vex image cleanup --help > /dev/null
@@ -315,3 +323,46 @@ jobs:
             exit 1
           fi
           echo "✅ lftools-uv installed for the action alone; legacy lftools absent"
+
+  test-old-lftools:
+    name: "Test action refuses old lftools-uv"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # 0.10.1 has no pinned extra; uv would install it with floating deps
+      - name: Run the action with lftools-uv 0.10.1
+        id: action
+        continue-on-error: true
+        uses: $/
+        with:
+          openstack_cloud: vex
+          clouds_yaml: placeholder
+          lftools_version: '0.10.1'
+          cleanup_k8s_clusters: 'false'
+          cleanup_stacks: 'false'
+          cleanup_servers: 'false'
+          cleanup_ports: 'false'
+          cleanup_volumes: 'false'
+          protect_images: 'false'
+          cleanup_images: 'false'
+
+      - name: Check the action stopped before installing anything
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          set -euo pipefail
+          if [[ "$OUTCOME" != "failure" ]]; then
+            echo "::error::The action accepted lftools-uv 0.10.1 ($OUTCOME)"
+            exit 1
+          fi
+          if [[ -e "$RUNNER_TEMP/openstack-cron-action/bin/lftools-uv" ]]; then
+            echo "::error::The action installed lftools-uv before refusing it"
+            exit 1
+          fi
+          echo "✅ lftools-uv 0.10.1 refused at input validation"
