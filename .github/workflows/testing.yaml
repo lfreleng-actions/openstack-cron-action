@@ -52,9 +52,42 @@ jobs:
           test -f scripts/cleanup-old-images.sh
           echo "✅ All scripts exist"
 
+      - name: "Enforce HTTPS for APT"
+        id: apt-https
+        # yamllint disable-line rule:line-length
+        uses: lfreleng-actions/apt-https-enforce-action@107838afeb79d37aeddb2b7f227f80f51df25180  # v0.0.1
+        with:
+          http_fallback_override: ${{ vars.APT_HTTP_FALLBACK }}
+
+      - name: Verify APT used HTTPS
+        shell: bash
+        env:
+          TRANSPORT: ${{ steps.apt-https.outputs.transport }}
+          FALLBACK_ENABLED: ${{ steps.apt-https.outputs.fallback_enabled }}
+        run: |
+          printf 'transport=%s\nfallback_enabled=%s\n' "$TRANSPORT" "$FALLBACK_ENABLED"
+          if [[ "$TRANSPORT" != https || "$FALLBACK_ENABLED" != false ]]; then
+            echo "::error::Expected APT to use HTTPS with HTTP fallback disabled"
+            exit 1
+          fi
+
+          shopt -s nullglob
+          sources=(/etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources)
+          if [[ -e /etc/apt/sources.list ]]; then
+            sources+=(/etc/apt/sources.list)
+          fi
+          if ((${#sources[@]})) && ! awk '
+            /^[[:space:]]*#/ { next }
+            FILENAME ~ /\.list$/ { sub(/#.*/, "") }
+            { $0 = tolower($0); sub(/^uris:/, "") }
+            /(^|[[:space:]])http:\/\// { exit 1 }
+          ' "${sources[@]}"; then
+            echo "::error::APT source files contain an HTTP URI or could not be read"
+            exit 1
+          fi
+
       - name: Shellcheck scripts
         run: |
-          sudo apt-get update -qq
           sudo apt-get install -y shellcheck
           shellcheck scripts/*.sh
           echo "✅ Shellcheck passed"
